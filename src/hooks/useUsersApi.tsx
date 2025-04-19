@@ -1,4 +1,3 @@
-
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { toast } from '@/hooks/use-toast';
@@ -11,6 +10,21 @@ export type User = {
   role: 'Admin' | 'User';
   status: 'Active' | 'Deleted';
   createdAt: string;
+  createdBy?: {
+    firstname: string;
+    lastname: string;
+  };
+  updatedAt?: string;
+  updatedBy?: {
+    firstname: string;
+    lastname: string;
+  };
+  deletedAt?: string;
+  deletedBy?: {
+    firstname: string;
+    lastname: string;
+  };
+  deletedReason?: string;
 };
 
 export const useUsersApi = () => {

@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -9,6 +8,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Loader2, ArrowUpDown } from "lucide-react";
+import { Item } from '@/hooks/useItemsApi';
+import TablePagination from '@/components/TablePagination';
+import ItemDetailsDialog from '@/components/items/ItemDetailsDialog';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -19,11 +22,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Eye, Pencil, Trash2, Loader2, Barcode } from "lucide-react";
-import { Item } from '@/hooks/useItemsApi';
-import TablePagination from '@/components/TablePagination';
+import ItemActions from './ItemActions';
 
 interface ItemsListProps {
   items: Item[];
@@ -32,6 +31,11 @@ interface ItemsListProps {
   onEdit: (item: Item) => void;
   onDelete: (item: Item) => void;
 }
+
+type SortConfig = {
+  key: keyof Item | 'typeId.type' | null;
+  direction: 'asc' | 'desc';
+};
 
 const ItemsList: React.FC<ItemsListProps> = ({
   items,
@@ -45,11 +49,50 @@ const ItemsList: React.FC<ItemsListProps> = ({
   const [deleteReason, setDeleteReason] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const [showDetailsDialog, setShowDetailsDialog] = useState(false);
+  const [selectedItem, setSelectedItem] = useState<Item | null>(null);
+  const [sortConfig, setSortConfig] = useState<SortConfig>({ key: null, direction: 'asc' });
 
-  // Calculate pagination
+  const sortedItems = React.useMemo(() => {
+    const sorted = [...items];
+    if (sortConfig.key) {
+      sorted.sort((a, b) => {
+        let aValue: any = sortConfig.key === 'typeId.type' 
+          ? (typeof a.typeId === 'object' ? a.typeId.type : '') 
+          : a[sortConfig.key as keyof Item];
+        let bValue: any = sortConfig.key === 'typeId.type'
+          ? (typeof b.typeId === 'object' ? b.typeId.type : '')
+          : b[sortConfig.key as keyof Item];
+
+        if (typeof aValue === 'string') aValue = aValue.toLowerCase();
+        if (typeof bValue === 'string') bValue = bValue.toLowerCase();
+
+        if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+    return sorted;
+  }, [items, sortConfig]);
+
   const startIndex = (currentPage - 1) * pageSize;
   const endIndex = startIndex + pageSize;
-  const paginatedItems = items.slice(startIndex, endIndex);
+  const paginatedItems = sortedItems.slice(startIndex, endIndex);
+
+  const handleSort = (key: SortConfig['key']) => {
+    setSortConfig(current => ({
+      key,
+      direction: current.key === key && current.direction === 'asc' ? 'desc' : 'asc'
+    }));
+  };
+
+  const getSortIcon = (key: SortConfig['key']) => {
+    return (
+      <ArrowUpDown className={`ml-1 h-4 w-4 inline ${
+        sortConfig.key === key ? 'opacity-100' : 'opacity-50'
+      }`} />
+    );
+  };
 
   const getStatusBadgeClass = (status: string) => {
     switch (status) {
@@ -87,58 +130,88 @@ const ItemsList: React.FC<ItemsListProps> = ({
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Serial No.</TableHead>
-                <TableHead>Barcode ID</TableHead>
-                <TableHead>Brand</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="w-[120px]">Actions</TableHead>
+                <TableHead 
+                  className="cursor-pointer hover:bg-muted/50"
+                  onClick={() => handleSort('itemName')}
+                >
+                  Name {getSortIcon('itemName')}
+                </TableHead>
+                <TableHead 
+                  className="hidden md:table-cell cursor-pointer hover:bg-muted/50"
+                  onClick={() => handleSort('typeId.type')}
+                >
+                  Type {getSortIcon('typeId.type')}
+                </TableHead>
+                <TableHead 
+                  className="hidden md:table-cell cursor-pointer hover:bg-muted/50"
+                  onClick={() => handleSort('serialNo')}
+                >
+                  Serial No. {getSortIcon('serialNo')}
+                </TableHead>
+                <TableHead 
+                  className="hidden md:table-cell cursor-pointer hover:bg-muted/50"
+                  onClick={() => handleSort('barcodeId')}
+                >
+                  Barcode ID {getSortIcon('barcodeId')}
+                </TableHead>
+                <TableHead 
+                  className="hidden md:table-cell cursor-pointer hover:bg-muted/50"
+                  onClick={() => handleSort('brand')}
+                >
+                  Brand {getSortIcon('brand')}
+                </TableHead>
+                <TableHead 
+                  className="cursor-pointer hover:bg-muted/50"
+                  onClick={() => handleSort('status')}
+                >
+                  Status {getSortIcon('status')}
+                </TableHead>
+                <TableHead className="w-[160px]">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {paginatedItems && paginatedItems.length > 0 ? (
                 paginatedItems.map((item: Item) => (
                   <TableRow key={item._id}>
-                    <TableCell className="font-medium">{item.itemName}</TableCell>
-                    <TableCell>{typeof item.typeId === 'object' ? item.typeId.type : 'Unknown'}</TableCell>
-                    <TableCell>{item.serialNo}</TableCell>
-                    <TableCell className="flex items-center">
-                      <Barcode className="h-4 w-4 mr-2 text-gray-500" />
-                      <span>{item.serialNo}</span>
+                    <TableCell className="font-medium">
+                      <div>
+                        {item.itemName}
+                        <span className="md:hidden text-xs text-muted-foreground block">
+                          {typeof item.typeId === 'object' ? item.typeId.type : 'Unknown'} - {item.brand}
+                          <div className="flex items-center gap-1 mt-1">
+                            <span className="text-xs text-muted-foreground">ID:</span>
+                            <span className="text-xs font-mono">{item.barcodeId}</span>
+                          </div>
+                        </span>
+                      </div>
                     </TableCell>
-                    <TableCell>{item.brand}</TableCell>
+                    <TableCell className="hidden md:table-cell">
+                      {typeof item.typeId === 'object' ? item.typeId.type : 'Unknown'}
+                    </TableCell>
+                    <TableCell className="hidden md:table-cell">{item.serialNo}</TableCell>
+                    <TableCell className="hidden md:table-cell">
+                      <div className="flex items-center">
+                        {/* <Barcode className="h-4 w-4 mr-2 text-gray-500" /> */}
+                        <span>{item.barcodeId}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="hidden md:table-cell">{item.brand}</TableCell>
                     <TableCell>
                       <span className={getStatusBadgeClass(item.status)}>
                         {item.status}
                       </span>
                     </TableCell>
                     <TableCell>
-                      <div className="flex gap-1">
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          onClick={() => viewItem(item._id)}
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          onClick={() => onEdit(item)}
-                          disabled={item.status !== 'Active'}
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          onClick={() => setItemToDelete(item)}
-                          disabled={item.status !== 'Active'}
-                        >
-                          <Trash2 className="h-4 w-4 text-red-500" />
-                        </Button>
-                      </div>
+                      <ItemActions
+                        item={item}
+                        onView={() => {
+                          setSelectedItem(item);
+                          setShowDetailsDialog(true);
+                        }}
+                        onEdit={onEdit}
+                        onDelete={setItemToDelete}
+                        onNavigate={viewItem}
+                      />
                     </TableCell>
                   </TableRow>
                 ))
@@ -155,7 +228,7 @@ const ItemsList: React.FC<ItemsListProps> = ({
           {items.length > 0 && (
             <TablePagination
               currentPage={currentPage}
-              totalItems={items.length}
+              totalItems={sortedItems.length}
               pageSize={pageSize}
               onPageChange={setCurrentPage}
               onPageSizeChange={setPageSize}
@@ -173,11 +246,11 @@ const ItemsList: React.FC<ItemsListProps> = ({
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="py-4">
-            <Input
+            <input
               placeholder="Reason for deletion"
               value={deleteReason}
               onChange={(e) => setDeleteReason(e.target.value)}
-              className="mt-2"
+              className="mt-2 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
               required
             />
           </div>
@@ -193,6 +266,12 @@ const ItemsList: React.FC<ItemsListProps> = ({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <ItemDetailsDialog
+        item={selectedItem}
+        open={showDetailsDialog}
+        onOpenChange={setShowDetailsDialog}
+      />
     </>
   );
 };

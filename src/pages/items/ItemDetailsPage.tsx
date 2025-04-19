@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
@@ -9,6 +8,10 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import {
   Table,
   TableBody,
@@ -17,10 +20,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Button } from "@/components/ui/button";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { AlertCircle, ArrowLeft, Loader2, WrenchIcon, Send } from 'lucide-react';
@@ -29,6 +28,7 @@ import { useRepairsApi } from '@/hooks/useRepairsApi';
 import { format } from 'date-fns';
 import { useForm } from 'react-hook-form';
 import { useAuth } from '@/hooks/useAuth';
+import BarcodeSearch from '@/components/items/BarcodeSearch';
 
 const ItemDetailsPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -37,7 +37,8 @@ const ItemDetailsPage: React.FC = () => {
   const { useItemHistory } = useItemsApi();
   const { useCreateRepair } = useRepairsApi();
   
-  const { data, isLoading, error } = useItemHistory(id || '');
+  const [currentId, setCurrentId] = useState<string>(id || '');
+  const { data, isLoading, error } = useItemHistory(currentId);
   const { mutate: createRepair, isPending: isCreatingRepair } = useCreateRepair();
   
   const [showRepairForm, setShowRepairForm] = useState(false);
@@ -49,11 +50,11 @@ const ItemDetailsPage: React.FC = () => {
   });
 
   const handleRepair = (data: { problem: string }) => {
-    if (!id || !user) return;
+    if (!currentId || !user) return;
     
     createRepair({
       date: new Date().toISOString(),
-      itemId: id,
+      itemId: currentId,
       problem: data.problem,
       reportBy: user.id
     }, {
@@ -62,6 +63,10 @@ const ItemDetailsPage: React.FC = () => {
         setShowRepairForm(false);
       }
     });
+  };
+
+  const handleItemFound = (item: any) => {
+    setCurrentId(item._id);
   };
 
   if (isLoading) {
@@ -98,16 +103,21 @@ const ItemDetailsPage: React.FC = () => {
 
   return (
     <div className="container mx-auto py-6">
-      <div className="flex items-center gap-2 mb-6">
-        <Button 
-          variant="outline" 
-          size="sm" 
-          onClick={() => navigate('/items')}
-        >
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Back
-        </Button>
-        <h1 className="text-3xl font-bold">{item.itemName}</h1>
+      <div className="flex flex-col gap-4 mb-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => navigate('/items')}
+            >
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back
+            </Button>
+            <h1 className="text-3xl font-bold">{item?.itemName || 'Item Details'}</h1>
+          </div>
+          <BarcodeSearch onItemFound={handleItemFound} />
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -131,6 +141,10 @@ const ItemDetailsPage: React.FC = () => {
                 <dd className="text-base">{item.serialNo}</dd>
               </div>
               <div>
+                <dt className="text-sm font-medium text-gray-500">Barcode ID</dt>
+                <dd className="text-base">{item.barcodeId}</dd>
+              </div>
+              <div>
                 <dt className="text-sm font-medium text-gray-500">Status</dt>
                 <dd className="text-base">
                   <span className={`px-2 py-1 text-xs rounded-full ${
@@ -149,6 +163,50 @@ const ItemDetailsPage: React.FC = () => {
                   <dd className="text-base whitespace-pre-wrap">{item.otherDetails}</dd>
                 </div>
               )}
+              <div className="border-t pt-4 mt-4">
+                <dt className="text-sm font-medium text-gray-500 mb-2">Record Information</dt>
+                <div className="space-y-3">
+                  <div>
+                    <dt className="text-xs font-medium text-gray-400">Created</dt>
+                    <dd className="text-sm">
+                      {item.createdBy ? `${item.createdBy.firstname} ${item.createdBy.lastname}` : 'Unknown'}
+                    </dd>
+                    <dd className="text-sm text-gray-500">
+                      {format(new Date(item.createdAt), 'PPP p')}
+                    </dd>
+                  </div>
+                  
+                  {item.updatedBy && (
+                    <div>
+                      <dt className="text-xs font-medium text-gray-400">Last Updated</dt>
+                      <dd className="text-sm">
+                        {`${item.updatedBy.firstname} ${item.updatedBy.lastname}`}
+                      </dd>
+                      <dd className="text-sm text-gray-500">
+                        {format(new Date(item.updatedAt || ''), 'PPP p')}
+                      </dd>
+                    </div>
+                  )}
+                  
+                  {item.deletedBy && (
+                    <div>
+                      <dt className="text-xs font-medium text-gray-400">Deleted</dt>
+                      <dd className="text-sm">
+                        {`${item.deletedBy.firstname} ${item.deletedBy.lastname}`}
+                      </dd>
+                      <dd className="text-sm text-gray-500">
+                        {format(new Date(item.deletedAt || ''), 'PPP p')}
+                      </dd>
+                      {item.deletedReason && (
+                        <>
+                          <dt className="text-xs font-medium text-gray-400 mt-1">Deletion Reason</dt>
+                          <dd className="text-sm whitespace-pre-wrap">{item.deletedReason}</dd>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
             </dl>
           </CardContent>
           <CardFooter>
@@ -171,13 +229,13 @@ const ItemDetailsPage: React.FC = () => {
             <CardDescription>Activity history for this item</CardDescription>
           </CardHeader>
           <CardContent>
-            <Tabs defaultValue="assignments">
+            <Tabs defaultValue="issuance">
               <TabsList className="mb-4">
-                <TabsTrigger value="assignments">Assignments</TabsTrigger>
+                <TabsTrigger value="issuance">Issuance</TabsTrigger>
                 <TabsTrigger value="repairs">Repairs</TabsTrigger>
               </TabsList>
               
-              <TabsContent value="assignments">
+              <TabsContent value="issuance">
                 <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
@@ -190,23 +248,23 @@ const ItemDetailsPage: React.FC = () => {
                     </TableHeader>
                     <TableBody>
                       {assignments && assignments.length > 0 ? (
-                        assignments.map((assignment: any) => (
-                          <TableRow key={assignment._id}>
-                            <TableCell>{format(new Date(assignment.date), 'PPP')}</TableCell>
-                            <TableCell>{assignment.roomId?.room || 'Unknown'}</TableCell>
+                        assignments.map((issuance: any) => (
+                          <TableRow key={issuance._id}>
+                            <TableCell>{format(new Date(issuance.date), 'PPP')}</TableCell>
+                            <TableCell>{issuance.roomId?.room || 'Unknown'}</TableCell>
                             <TableCell>
-                              {assignment.assignedBy ? 
-                                `${assignment.assignedBy.firstname} ${assignment.assignedBy.lastname}` : 
+                              {issuance.assignedBy ? 
+                                `${issuance.assignedBy.firstname} ${issuance.assignedBy.lastname}` : 
                                 'Unknown'}
                             </TableCell>
                             <TableCell>
                               <span className={`px-2 py-1 text-xs rounded-full ${
-                                assignment.status === 'active' ? 'bg-green-100 text-green-800' : 
-                                assignment.status === 'transferred' ? 'bg-yellow-100 text-yellow-800' : 
-                                assignment.status === 'surrendered' ? 'bg-blue-100 text-blue-800' : 
+                                issuance.status === 'Active' ? 'bg-green-100 text-green-800' : 
+                                issuance.status === 'Transferred' ? 'bg-yellow-100 text-yellow-800' : 
+                                issuance.status === 'Surrendered' ? 'bg-blue-100 text-blue-800' : 
                                 'bg-gray-100 text-gray-800'
                               }`}>
-                                {assignment.status}
+                                {issuance.status}
                               </span>
                             </TableCell>
                           </TableRow>
@@ -214,7 +272,7 @@ const ItemDetailsPage: React.FC = () => {
                       ) : (
                         <TableRow>
                           <TableCell colSpan={4} className="text-center py-4">
-                            No assignment records found for this item.
+                            No issuance records found for this item.
                           </TableCell>
                         </TableRow>
                       )}

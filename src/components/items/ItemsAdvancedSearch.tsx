@@ -36,7 +36,7 @@ const ItemsAdvancedSearch: React.FC<ItemsAdvancedSearchProps> = ({
           <SelectContent>
             <SelectItem value="all">All Types</SelectItem>
             {itemTypes?.map((type: ItemType) => (
-              <SelectItem key={type._id} value={type._id}>{type.type}</SelectItem>
+              <SelectItem key={type._id} value={type._id || `type-${type.type}`}>{type.type}</SelectItem>
             ))}
           </SelectContent>
         </Select>

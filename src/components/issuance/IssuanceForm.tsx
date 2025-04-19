@@ -1,30 +1,11 @@
-import React from 'react';
+
+import React, { useState, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Loader2 } from 'lucide-react';
 import { Calendar } from "@/components/ui/calendar";
@@ -32,6 +13,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { CalendarIcon } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import SignaturePad from 'react-signature-canvas';
 
 const formSchema = z.object({
   date: z.date({
@@ -43,6 +26,8 @@ const formSchema = z.object({
   roomId: z.string({
     required_error: "Area is required",
   }),
+  remarks: z.string().optional(),
+  signature: z.string().optional(),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -72,6 +57,7 @@ const IssuanceForm: React.FC<IssuanceFormProps> = ({
     resolver: zodResolver(formSchema),
     defaultValues: {
       date: new Date(),
+      remarks: '',
     },
   });
 
@@ -79,11 +65,21 @@ const IssuanceForm: React.FC<IssuanceFormProps> = ({
     (item) => item.status !== 'Assigned' && item.status !== 'Deleted' && item.status !== 'Defective'
   );
 
+  const signaturePadRef = useRef<any>(null);
+
   const handleSubmit = (data: FormData) => {
+    const signature = signaturePadRef.current?.getTrimmedCanvas().toDataURL() || '';
     onSubmit({
       ...data,
       date: format(data.date, 'yyyy-MM-dd'),
+      signature
     });
+  };
+
+  const clearSignature = () => {
+    if (signaturePadRef.current) {
+      signaturePadRef.current.clear();
+    }
   };
 
   return (
@@ -131,6 +127,7 @@ const IssuanceForm: React.FC<IssuanceFormProps> = ({
                         disabled={(date) =>
                           date > new Date() || date < new Date("1900-01-01")
                         }
+                        initialFocus
                       />
                     </PopoverContent>
                   </Popover>
@@ -161,7 +158,7 @@ const IssuanceForm: React.FC<IssuanceFormProps> = ({
                       ) : availableItems.length > 0 ? (
                         availableItems.map((item) => (
                           <SelectItem key={item._id} value={item._id}>
-                            {item.itemName} - {item.serialNo}
+                            {item.barcodeId} - {item.itemName}
                           </SelectItem>
                         ))
                       ) : (
@@ -206,6 +203,38 @@ const IssuanceForm: React.FC<IssuanceFormProps> = ({
                 </FormItem>
               )}
             />
+
+            <FormField
+              control={form.control}
+              name="remarks"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Remarks</FormLabel>
+                  <FormControl>
+                    <Textarea 
+                      placeholder="Add any additional notes here..."
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <div className="space-y-2">
+              <FormLabel>Receiver's Signature (optional)</FormLabel>
+              <div className="border rounded-md p-2 bg-white">
+                <SignaturePad
+                  ref={signaturePadRef}
+                  canvasProps={{
+                    className: "w-full h-[150px]"
+                  }}
+                />
+              </div>
+              <Button type="button" variant="outline" size="sm" onClick={clearSignature}>
+                Clear Signature
+              </Button>
+            </div>
 
             <DialogFooter>
               <Button 

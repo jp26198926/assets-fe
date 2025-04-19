@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,23 +11,35 @@ interface IssuanceAdvancedSearchProps {
   };
   onFilterChange: (key: string, value: string) => void;
   onReset: () => void;
+  areas?: Array<{ _id: string; area: string }>;
 }
 
 const IssuanceAdvancedSearch: React.FC<IssuanceAdvancedSearchProps> = ({
   filters,
   onFilterChange,
-  onReset
+  onReset,
+  areas = []
 }) => {
   return (
     <div className="space-y-4 py-4">
       <div className="space-y-2">
         <label className="text-sm font-medium">Area</label>
-        <Input
-          placeholder="Filter by area"
-          value={filters.roomId || ''}
-          onChange={(e) => onFilterChange('roomId', e.target.value)}
-          className="w-full"
-        />
+        <Select 
+          value={filters.roomId || "all"}
+          onValueChange={(value) => onFilterChange('roomId', value)}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Select area" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Areas</SelectItem>
+            {areas.map(area => (
+              <SelectItem key={area._id} value={area.area || area._id}>
+                {area.area}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       <div className="space-y-2">

@@ -11,7 +11,7 @@ export type Trail = {
   };
   action: string;
   entity: string;
-  entityId: string;
+  entityId: string | object; // Updated to allow both string and object values
   details: string;
   ip: string;
   timestamp: string;

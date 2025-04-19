@@ -9,8 +9,25 @@ export type Issuance = {
   itemId: any;
   roomId: any;
   assignedBy: any;
-  status: 'active' | 'deleted' | 'transferred' | 'surrendered';
+  status: 'Active' | 'Deleted' | 'Transferred' | 'Surrendered';
   createdAt: string;
+  createdBy?: {
+    firstname: string;
+    lastname: string;
+  };
+  updatedAt?: string;
+  updatedBy?: {
+    firstname: string;
+    lastname: string;
+  };
+  deletedAt?: string;
+  deletedBy?: {
+    firstname: string;
+    lastname: string;
+  };
+  deletedReason?: string;
+  remarks?: string;
+  signature?: string;
 };
 
 export const useIssuanceApi = () => {
@@ -21,21 +38,43 @@ export const useIssuanceApi = () => {
     return response.data;
   };
 
-  const createIssuance = async (issuanceData: { date: string, itemId: string, roomId: string }) => {
+  const createIssuance = async (issuanceData: { 
+    date: string, 
+    itemId: string, 
+    roomId: string,
+    remarks?: string,
+    signature?: string 
+  }) => {
     const response = await api.post('/api/issuance', issuanceData);
     return response.data;
   };
 
   const updateIssuanceStatus = async ({ 
     id, 
-    status, 
-    reason 
+    status,
+    newRoomId,
+    remarks,
+    signature
   }: { 
     id: string; 
-    status: 'transferred' | 'surrendered'; 
-    reason?: string 
+    status: 'Transferred' | 'Surrendered'; 
+    newRoomId?: string;
+    remarks?: string;
+    signature?: string 
   }) => {
-    const response = await api.put(`/api/issuance/${id}/status`, { status, reason });
+    const response = await api.put(`/api/issuance/${id}/status`, { 
+      status, 
+      newRoomId,
+      remarks,
+      signature
+    });
+    return response.data;
+  };
+
+  const deleteIssuance = async ({ id, reason }: { id: string; reason?: string }) => {
+    const response = await api.delete(`/api/issuance/${id}`, {
+      data: { reason }
+    });
     return response.data;
   };
 
@@ -49,10 +88,6 @@ export const useIssuanceApi = () => {
     useMutation({
       mutationFn: createIssuance,
       onSuccess: () => {
-        toast({
-          title: 'Success',
-          description: 'Issuance created successfully',
-        });
         queryClient.invalidateQueries({ queryKey: ['issuances'] });
         queryClient.invalidateQueries({ queryKey: ['items'] });
       }
@@ -62,10 +97,15 @@ export const useIssuanceApi = () => {
     useMutation({
       mutationFn: updateIssuanceStatus,
       onSuccess: () => {
-        toast({
-          title: 'Success',
-          description: 'Issuance status updated successfully',
-        });
+        queryClient.invalidateQueries({ queryKey: ['issuances'] });
+        queryClient.invalidateQueries({ queryKey: ['items'] });
+      }
+    });
+
+  const useDeleteIssuance = () =>
+    useMutation({
+      mutationFn: deleteIssuance,
+      onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: ['issuances'] });
         queryClient.invalidateQueries({ queryKey: ['items'] });
       }
@@ -74,6 +114,7 @@ export const useIssuanceApi = () => {
   return {
     useIssuances,
     useCreateIssuance,
-    useUpdateIssuanceStatus
+    useUpdateIssuanceStatus,
+    useDeleteIssuance
   };
 };

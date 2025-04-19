@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import {
   Card,
@@ -19,6 +18,12 @@ import SearchExportHeader from '@/components/SearchExportHeader';
 import ItemsList from '@/components/items/ItemsList';
 import ItemForm from '@/components/items/ItemForm';
 import ItemsAdvancedSearch from '@/components/items/ItemsAdvancedSearch';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 const ItemsPage: React.FC = () => {
   const { useItems, useCreateItem, useUpdateItem, useDeleteItem } = useItemsApi();
@@ -46,6 +51,8 @@ const ItemsPage: React.FC = () => {
       item.itemName.toLowerCase().includes(searchQuery.toLowerCase()) ||
       item.brand.toLowerCase().includes(searchQuery.toLowerCase()) ||
       item.serialNo.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      item.barcodeId.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      item.status.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (item.typeId && typeof item.typeId === 'object' && 
         item.typeId.type.toLowerCase().includes(searchQuery.toLowerCase()));
     
@@ -153,8 +160,12 @@ const ItemsPage: React.FC = () => {
       { header: 'Item Name', key: 'itemName', width: 20 },
       { header: 'Type', key: 'typeId.type', width: 15 },
       { header: 'Serial No', key: 'serialNo', width: 15 },
+      { header: 'Barcode ID', key: 'barcodeId', width: 15 },
       { header: 'Brand', key: 'brand', width: 15 },
       { header: 'Status', key: 'status', width: 10 },
+      { header: 'Created Date', key: 'createdAt', width: 15 },
+      { header: 'Created By', key: 'createdBy.firstname', width: 15 },
+      { header: 'Updated Date', key: 'updatedAt', width: 15 },
       { header: 'Other Details', key: 'otherDetails', width: 30 }
     ];
 
@@ -166,6 +177,7 @@ const ItemsPage: React.FC = () => {
       { header: 'Item Name', key: 'itemName' },
       { header: 'Type', key: 'typeId.type' },
       { header: 'Serial No', key: 'serialNo' },
+      { header: 'Barcode ID', key: 'barcodeId' },
       { header: 'Brand', key: 'brand' },
       { header: 'Status', key: 'status' }
     ];
@@ -192,9 +204,18 @@ const ItemsPage: React.FC = () => {
           />
         }
         actionButton={
-          <Button onClick={() => setShowForm(true)}>
-            <Plus className="mr-2 h-4 w-4" /> Add Item
-          </Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button onClick={() => setShowForm(true)} size="icon">
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Add New Item</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         }
       />
 

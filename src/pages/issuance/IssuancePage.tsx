@@ -6,20 +6,27 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Plus } from "lucide-react";
 import { useIssuanceApi } from '@/hooks/useIssuanceApi';
 import { useAreasApi } from '@/hooks/useAreasApi';
 import { useItemsApi } from '@/hooks/useItemsApi';
 import { toast } from '@/hooks/use-toast';
 import IssuanceForm from '@/components/issuance/IssuanceForm';
 import IssuanceList from '@/components/issuance/IssuanceList';
+import IssuanceActions from '@/components/issuance/IssuanceActions';
 import { exportToExcel, exportToPdf } from '@/lib/exportUtils';
 import SearchExportHeader from '@/components/SearchExportHeader';
 import IssuanceAdvancedSearch from '@/components/issuance/IssuanceAdvancedSearch';
+import { useIssuanceFiltering } from '@/hooks/useIssuanceFiltering';
+import { format } from 'date-fns';
 
 const IssuancePage = () => {
-  const { useIssuances, useCreateIssuance } = useIssuanceApi();
+  const { 
+    useIssuances, 
+    useCreateIssuance, 
+    useUpdateIssuanceStatus, 
+    useDeleteIssuance 
+  } = useIssuanceApi();
+  
   const { useAreas } = useAreasApi();
   const { useItems } = useItemsApi();
   
@@ -28,28 +35,21 @@ const IssuancePage = () => {
   const { data: items = [], isLoading: isLoadingItems } = useItems();
   
   const { mutate: createIssuance, isPending: isCreating } = useCreateIssuance();
+  const { mutate: updateStatus, isPending: isUpdatingStatus } = useUpdateIssuanceStatus();
+  const { mutate: deleteIssuance, isPending: isDeleting } = useDeleteIssuance();
   
   const [showForm, setShowForm] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [filters, setFilters] = useState<any>({});
 
-  // Filter issuances based on search and filters
-  const filteredIssuances = issuances.filter((issuance: any) => {
-    // Match search query
-    const matchesSearch = !searchQuery || 
-      issuance.itemId?.itemName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      issuance.roomId?.room?.toLowerCase().includes(searchQuery.toLowerCase());
-    
-    // Match room filter
-    const matchesRoom = !filters.roomId || 
-      issuance.roomId?.room?.toLowerCase().includes(filters.roomId.toLowerCase());
-    
-    // Match status filter
-    const matchesStatus = !filters.status || filters.status === 'all' || 
-      issuance.status === filters.status;
-    
-    return matchesSearch && matchesRoom && matchesStatus;
-  });
+  const {
+    searchQuery,
+    setSearchQuery,
+    filters,
+    filteredIssuances,
+    handleAdvancedFilterChange,
+    resetFilters,
+    sortConfig,
+    handleSort
+  } = useIssuanceFiltering(issuances);
 
   const handleSubmit = (data: any) => {
     createIssuance(data, {
@@ -70,35 +70,128 @@ const IssuancePage = () => {
     });
   };
 
-  // Export functions
+  const handleDelete = (id: string, reason?: string) => {
+    deleteIssuance({ id, reason }, {
+      onSuccess: () => {
+        toast({
+          title: 'Success',
+          description: 'Issuance deleted successfully',
+        });
+      },
+      onError: (error: any) => {
+        toast({
+          title: 'Error',
+          description: error.response?.data?.error || 'Failed to delete issuance',
+          variant: 'destructive'
+        });
+      }
+    });
+  };
+
+  const handleTransfer = (id: string, data: { newRoomId: string, date: Date, remarks?: string }) => {
+    updateStatus(
+      { 
+        id, 
+        status: 'Transferred', 
+        newRoomId: data.newRoomId,
+        remarks: data.remarks
+      },
+      {
+        onSuccess: () => {
+          toast({
+            title: 'Success',
+            description: 'Item transferred successfully',
+          });
+        },
+        onError: (error: any) => {
+          toast({
+            title: 'Error',
+            description: error.response?.data?.error || 'Failed to transfer item',
+            variant: 'destructive'
+          });
+        }
+      }
+    );
+  };
+
+  const handleSurrender = (id: string, remarks?: string) => {
+    updateStatus(
+      { 
+        id, 
+        status: 'Surrendered',
+        remarks: remarks
+      },
+      {
+        onSuccess: () => {
+          toast({
+            title: 'Success',
+            description: 'Item surrendered successfully',
+          });
+        },
+        onError: (error: any) => {
+          toast({
+            title: 'Error',
+            description: error.response?.data?.error || 'Failed to surrender item',
+            variant: 'destructive'
+          });
+        }
+      }
+    );
+  };
+
+  const formatSafeDate = (dateString: string) => {
+    try {
+      const dateObj = new Date(dateString);
+      if (isNaN(dateObj.getTime())) {
+        return 'Invalid date';
+      }
+      return format(dateObj, 'yyyy-MM-dd');
+    } catch (e) {
+      console.error("Error formatting date:", e, dateString);
+      return 'Invalid date';
+    }
+  };
+
   const exportToExcelHandler = () => {
     const columns = [
       { header: 'Date', key: 'date', width: 15 },
       { header: 'Item', key: 'itemId.itemName', width: 20 },
-      { header: 'Area', key: 'roomId.room', width: 20 },
-      { header: 'Status', key: 'status', width: 15 }
+      { header: 'Item Type', key: 'itemId.typeId.type', width: 15 },
+      { header: 'Barcode ID', key: 'itemId.barcodeId', width: 15 },
+      { header: 'Area', key: 'roomId.area', width: 20 },
+      { header: 'Status', key: 'status', width: 15 },
+      { header: 'Remarks', key: 'remarks', width: 25 },
+      { header: 'Last Updated', key: 'updatedAt', width: 15 }
     ];
 
-    exportToExcel(filteredIssuances, columns, 'Issuances');
+    const formattedData = filteredIssuances.map(issuance => ({
+      ...issuance,
+      date: formatSafeDate(issuance.date),
+      updatedAt: formatSafeDate(issuance.updatedAt || issuance.createdAt)
+    }));
+
+    exportToExcel(formattedData, columns, 'Issuances');
   };
 
   const exportToPdfHandler = () => {
     const columns = [
       { header: 'Date', key: 'date' },
       { header: 'Item', key: 'itemId.itemName' },
-      { header: 'Area', key: 'roomId.room' },
-      { header: 'Status', key: 'status' }
+      { header: 'Item Type', key: 'itemId.typeId.type' },
+      { header: 'Barcode ID', key: 'itemId.barcodeId' },
+      { header: 'Area', key: 'roomId.area' },
+      { header: 'Status', key: 'status' },
+      { header: 'Remarks', key: 'remarks' },
+      { header: 'Last Updated', key: 'updatedAt' }
     ];
 
-    exportToPdf(filteredIssuances, columns, 'Issuances List', 'Issuances');
-  };
+    const formattedData = filteredIssuances.map(issuance => ({
+      ...issuance,
+      date: formatSafeDate(issuance.date),
+      updatedAt: formatSafeDate(issuance.updatedAt || issuance.createdAt)
+    }));
 
-  const handleAdvancedFilterChange = (key: string, value: string) => {
-    setFilters(prev => ({ ...prev, [key]: value }));
-  };
-
-  const resetFilters = () => {
-    setFilters({});
+    exportToPdf(formattedData, columns, 'Issuances List', 'Issuances');
   };
 
   return (
@@ -116,12 +209,11 @@ const IssuancePage = () => {
             filters={filters}
             onFilterChange={handleAdvancedFilterChange}
             onReset={resetFilters}
+            areas={areas}
           />
         }
         actionButton={
-          <Button onClick={() => setShowForm(true)}>
-            <Plus className="mr-2 h-4 w-4" /> New Issuance
-          </Button>
+          <IssuanceActions onNewIssuance={() => setShowForm(true)} />
         }
       />
 
@@ -135,6 +227,12 @@ const IssuancePage = () => {
             issuances={filteredIssuances}
             isLoading={isLoading}
             searchQuery={searchQuery}
+            onDelete={handleDelete}
+            onTransfer={handleTransfer}
+            onSurrender={handleSurrender}
+            areas={areas}
+            sortConfig={sortConfig}
+            onSort={handleSort}
           />
         </CardContent>
       </Card>

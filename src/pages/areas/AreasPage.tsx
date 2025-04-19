@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import {
   Card,
@@ -7,16 +6,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -27,13 +17,16 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Plus, Loader2, Pencil, Trash2 } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Loader2, Plus } from "lucide-react";
 import { useAreasApi, Area } from '@/hooks/useAreasApi';
-import { useForm } from 'react-hook-form';
 import { toast } from '@/hooks/use-toast';
 import SearchExportHeader from '@/components/SearchExportHeader';
 import { exportToExcel, exportToPdf } from '@/lib/exportUtils';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import AreaForm from '@/components/areas/AreaForm';
+import AreasTable from '@/components/areas/AreasTable';
+import { useAreasFiltering } from '@/hooks/useAreasFiltering';
 
 const AreasPage: React.FC = () => {
   const { useAreas, useCreateArea, useUpdateArea, useDeleteArea } = useAreasApi();
@@ -46,27 +39,22 @@ const AreasPage: React.FC = () => {
   const [editingArea, setEditingArea] = useState<Area | null>(null);
   const [areaToDelete, setAreaToDelete] = useState<Area | null>(null);
   const [deleteReason, setDeleteReason] = useState('');
-  
-  const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('');
-  
-  const { register, handleSubmit, reset, setValue, formState: { errors } } = useForm({
-    defaultValues: {
-      area: ''
-    }
-  });
 
-  // Filter areas based on search query and status filter
-  const filteredAreas = areas?.filter((area: Area) => {
-    // Filter by search query
-    const matchesSearch = !searchQuery || 
-      area.area.toLowerCase().includes(searchQuery.toLowerCase());
-    
-    // Filter by status
-    const matchesStatus = !statusFilter || area.status === statusFilter;
-    
-    return matchesSearch && matchesStatus;
-  });
+  const {
+    paginatedAreas,
+    searchQuery,
+    statusFilter,
+    currentPage,
+    pageSize,
+    sortField,
+    sortDirection,
+    setSearchQuery,
+    setStatusFilter,
+    setCurrentPage,
+    setPageSize,
+    handleSort,
+    filteredAreas
+  } = useAreasFiltering({ areas });
 
   const onSubmit = (data: { area: string }) => {
     if (editingArea) {
@@ -75,7 +63,6 @@ const AreasPage: React.FC = () => {
         data: data
       }, {
         onSuccess: () => {
-          reset();
           setEditingArea(null);
           setShowForm(false);
         },
@@ -90,7 +77,6 @@ const AreasPage: React.FC = () => {
     } else {
       createArea(data, {
         onSuccess: () => {
-          reset();
           setShowForm(false);
         },
         onError: (error: any) => {
@@ -106,7 +92,6 @@ const AreasPage: React.FC = () => {
 
   const handleEdit = (area: Area) => {
     setEditingArea(area);
-    setValue('area', area.area);
     setShowForm(true);
   };
 
@@ -132,18 +117,15 @@ const AreasPage: React.FC = () => {
   };
 
   const cancelForm = () => {
-    reset();
     setEditingArea(null);
     setShowForm(false);
   };
 
-  // Export functions
   const exportAreasToExcel = () => {
     const columns = [
       { header: 'Area', key: 'area', width: 30 },
       { header: 'Status', key: 'status', width: 15 }
     ];
-
     exportToExcel(filteredAreas, columns, 'Areas_List');
   };
 
@@ -152,18 +134,16 @@ const AreasPage: React.FC = () => {
       { header: 'Area', key: 'area' },
       { header: 'Status', key: 'status' }
     ];
-
     exportToPdf(filteredAreas, columns, 'Areas List', 'Areas_List');
   };
 
-  // Advanced search component
   const AdvancedSearchContent = (
     <div className="space-y-4 py-4">
       <div className="space-y-2">
         <label className="text-sm font-medium">Status</label>
         <Select 
           onValueChange={(value) => setStatusFilter(value)}
-          value={statusFilter}
+          value={statusFilter || 'all'}
         >
           <SelectTrigger>
             <SelectValue placeholder="Select status" />
@@ -177,7 +157,7 @@ const AreasPage: React.FC = () => {
       </div>
       
       <div className="flex justify-between pt-4">
-        <Button variant="outline" onClick={() => setStatusFilter('all')}>
+        <Button variant="outline" onClick={() => setStatusFilter('')}>
           Reset Filters
         </Button>
       </div>
@@ -191,7 +171,7 @@ const AreasPage: React.FC = () => {
         searchPlaceholder="Search areas..."
         searchValue={searchQuery}
         onSearchChange={setSearchQuery}
-        onSearch={() => {}} // Immediate filtering
+        onSearch={() => {}}
         onExportExcel={exportAreasToExcel}
         onExportPdf={exportAreasToPdf}
         advancedSearchContent={AdvancedSearchContent}
@@ -203,47 +183,13 @@ const AreasPage: React.FC = () => {
       />
 
       {showForm && (
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle>{editingArea ? 'Edit Area' : 'Add New Area'}</CardTitle>
-            <CardDescription>
-              {editingArea ? 'Update area details' : 'Create a new area in the system'}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-              <div className="space-y-2">
-                <label htmlFor="area" className="text-sm font-medium">
-                  Area Name
-                </label>
-                <Input
-                  id="area"
-                  placeholder="Enter area name or number"
-                  {...register("area", { required: "Area name is required" })}
-                  className={errors.area ? "border-red-500" : ""}
-                />
-                {errors.area && (
-                  <p className="text-red-500 text-sm">{errors.area.message}</p>
-                )}
-              </div>
-              <div className="flex gap-2">
-                <Button type="submit" disabled={isCreating || isUpdating}>
-                  {(isCreating || isUpdating) ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : editingArea ? (
-                    <Pencil className="mr-2 h-4 w-4" />
-                  ) : (
-                    <Plus className="mr-2 h-4 w-4" />
-                  )}
-                  {editingArea ? 'Update Area' : 'Create Area'}
-                </Button>
-                <Button type="button" variant="outline" onClick={cancelForm}>
-                  Cancel
-                </Button>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
+        <AreaForm
+          editingArea={editingArea}
+          isCreating={isCreating}
+          isUpdating={isUpdating}
+          onSubmit={onSubmit}
+          onCancel={cancelForm}
+        />
       )}
 
       <Card>
@@ -257,51 +203,19 @@ const AreasPage: React.FC = () => {
               <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Area</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="w-[100px]">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredAreas && filteredAreas.length > 0 ? (
-                  filteredAreas.map((area: Area) => (
-                    <TableRow key={area._id}>
-                      <TableCell className="font-medium">{area.area}</TableCell>
-                      <TableCell>{area.status}</TableCell>
-                      <TableCell>
-                        <div className="flex gap-2">
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            onClick={() => handleEdit(area)}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            onClick={() => setAreaToDelete(area)}
-                          >
-                            <Trash2 className="h-4 w-4 text-red-500" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={3} className="text-center py-4">
-                      {searchQuery || statusFilter ? 
-                        'No areas found matching your search criteria.' : 
-                        'No areas found. Create some using the button above.'}
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
+            <AreasTable
+              areas={paginatedAreas}
+              onEdit={handleEdit}
+              onDelete={setAreaToDelete}
+              currentPage={currentPage}
+              pageSize={pageSize}
+              totalItems={filteredAreas.length}
+              onPageChange={setCurrentPage}
+              onPageSizeChange={setPageSize}
+              sortField={sortField}
+              sortDirection={sortDirection}
+              onSort={handleSort}
+            />
           )}
         </CardContent>
       </Card>

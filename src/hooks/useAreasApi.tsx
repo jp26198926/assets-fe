@@ -8,6 +8,21 @@ export type Area = {
   area: string;
   status: string;
   createdAt: string;
+  createdBy?: { 
+    firstname: string; 
+    lastname: string; 
+  };
+  updatedAt?: string;
+  updatedBy?: { 
+    firstname: string; 
+    lastname: string; 
+  };
+  deletedAt?: string;
+  deletedBy?: { 
+    firstname: string; 
+    lastname: string; 
+  };
+  deletedReason?: string;
 };
 
 export const useAreasApi = () => {

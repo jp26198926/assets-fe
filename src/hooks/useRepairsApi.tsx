@@ -11,8 +11,23 @@ export type Repair = {
   diagnosis?: string;
   reportBy: any;
   checkedBy?: any;
-  status: 'Ongoing' | 'Completed' | 'Deleted';
+  status: 'Ongoing' | 'Fixed' | 'Defective' | 'Deleted';
   createdAt: string;
+  createdBy?: {
+    firstname: string;
+    lastname: string;
+  };
+  updatedAt?: string;
+  updatedBy?: {
+    firstname: string;
+    lastname: string;
+  };
+  deletedAt?: string;
+  deletedBy?: {
+    firstname: string;
+    lastname: string;
+  };
+  deletedReason?: string;
 };
 
 export const useRepairsApi = () => {
@@ -34,6 +49,8 @@ export const useRepairsApi = () => {
     problem: string, 
     reportBy: string 
   }) => {
+    // Add console logging to help debug the request
+    console.log('Creating repair with data:', repairData);
     const response = await api.post('/api/repairs', repairData);
     return response.data;
   };
@@ -78,6 +95,17 @@ export const useRepairsApi = () => {
     return response.data;
   };
 
+  const markDefective = async ({ 
+    id, 
+    reason 
+  }: { 
+    id: string; 
+    reason: string 
+  }) => {
+    const response = await api.put(`/api/repairs/${id}/defective`, { reason });
+    return response.data;
+  };
+
   const useRepairs = () => 
     useQuery({
       queryKey: ['repairs'],
@@ -101,6 +129,14 @@ export const useRepairsApi = () => {
         });
         queryClient.invalidateQueries({ queryKey: ['repairs'] });
         queryClient.invalidateQueries({ queryKey: ['items'] });
+      },
+      onError: (error: any) => {
+        console.error('Error creating repair:', error);
+        toast({
+          title: 'Error',
+          description: error?.response?.data?.error || 'Failed to create repair record',
+          variant: 'destructive',
+        });
       }
     });
 
@@ -122,7 +158,7 @@ export const useRepairsApi = () => {
       onSuccess: () => {
         toast({
           title: 'Success',
-          description: 'Repair marked as completed successfully',
+          description: 'Repair marked as fixed successfully',
         });
         queryClient.invalidateQueries({ queryKey: ['repairs'] });
         queryClient.invalidateQueries({ queryKey: ['items'] });
@@ -141,12 +177,26 @@ export const useRepairsApi = () => {
       }
     });
 
+  const useMarkDefective = () => 
+    useMutation({
+      mutationFn: markDefective,
+      onSuccess: () => {
+        toast({
+          title: 'Success',
+          description: 'Repair marked as defective successfully',
+        });
+        queryClient.invalidateQueries({ queryKey: ['repairs'] });
+        queryClient.invalidateQueries({ queryKey: ['items'] });
+      }
+    });
+
   return {
     useRepairs,
     useRepair,
     useCreateRepair,
     useUpdateRepair,
     useCompleteRepair,
-    useDeleteRepair
+    useDeleteRepair,
+    useMarkDefective
   };
 };

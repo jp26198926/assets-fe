@@ -14,9 +14,26 @@ export type Item = {
   itemName: string;
   brand: string;
   serialNo: string;
+  barcodeId: string;
   otherDetails?: string;
+  photo?: string; // Added photo property as optional
   status: 'Active' | 'Deleted' | 'Defective' | 'Assigned';
   createdAt: string;
+  createdBy?: {
+    firstname: string;
+    lastname: string;
+  };
+  updatedAt?: string;
+  updatedBy?: {
+    firstname: string;
+    lastname: string;
+  };
+  deletedAt?: string;
+  deletedBy?: {
+    firstname: string;
+    lastname: string;
+  };
+  deletedReason?: string;
 };
 
 export const useItemsApi = () => {

@@ -49,14 +49,17 @@ export const exportToPdf = <T extends Record<string, any>>(
   fileName: string
 ) => {
   try {
-    // Create PDF document
-    const doc = new jsPDF();
+    // Create PDF document in landscape orientation
+    const doc = new jsPDF({
+      orientation: 'landscape',
+      unit: 'mm'
+    });
     
     // Add title
-    doc.setFontSize(18);
-    doc.text(title, 14, 22);
-    doc.setFontSize(11);
-    doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 14, 30);
+    doc.setFontSize(16);
+    doc.text(title, 14, 15);
+    doc.setFontSize(10);
+    doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 14, 22);
 
     // Format data for PDF
     const headers = columns.map(col => col.header);
@@ -67,14 +70,23 @@ export const exportToPdf = <T extends Record<string, any>>(
       })
     );
 
-    // Create table
+    // Create table with smaller font size for better fit
     autoTable(doc, {
       head: [headers],
       body: rows,
-      startY: 40,
-      styles: { fontSize: 10, cellPadding: 3 },
-      headStyles: { fillColor: [41, 128, 185], textColor: 255 },
-      alternateRowStyles: { fillColor: [245, 245, 245] }
+      startY: 30,
+      styles: { 
+        fontSize: 8,
+        cellPadding: 2
+      },
+      headStyles: { 
+        fillColor: [41, 128, 185],
+        textColor: 255,
+        fontSize: 9
+      },
+      alternateRowStyles: { fillColor: [245, 245, 245] },
+      margin: { top: 30, right: 10, bottom: 10, left: 10 },
+      tableWidth: 'auto'
     });
 
     // Save PDF

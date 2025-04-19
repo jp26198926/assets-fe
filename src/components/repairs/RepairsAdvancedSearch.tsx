@@ -8,6 +8,9 @@ interface RepairsAdvancedSearchProps {
   filters: {
     problem?: string;
     status?: string;
+    startDate?: string;
+    endDate?: string;
+    itemType?: string;
   };
   onFilterChange: (key: string, value: string) => void;
   onReset: () => void;
@@ -34,7 +37,7 @@ const RepairsAdvancedSearch: React.FC<RepairsAdvancedSearchProps> = ({
         <label className="text-sm font-medium">Status</label>
         <Select 
           onValueChange={(value) => onFilterChange('status', value)}
-          value={filters.status || "all"}
+          value={filters.status || ""}
         >
           <SelectTrigger>
             <SelectValue placeholder="Select status" />
@@ -42,7 +45,9 @@ const RepairsAdvancedSearch: React.FC<RepairsAdvancedSearchProps> = ({
           <SelectContent>
             <SelectItem value="all">All</SelectItem>
             <SelectItem value="Ongoing">Ongoing</SelectItem>
-            <SelectItem value="Completed">Completed</SelectItem>
+            <SelectItem value="Fixed">Fixed</SelectItem>
+            <SelectItem value="Defective">Defective</SelectItem>
+            <SelectItem value="Deleted">Deleted</SelectItem>
           </SelectContent>
         </Select>
       </div>

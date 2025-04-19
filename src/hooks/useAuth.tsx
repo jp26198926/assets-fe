@@ -1,14 +1,19 @@
-
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { useToast } from './use-toast';
-import { api } from '../lib/api';
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  ReactNode,
+} from "react";
+import { useToast } from "./use-toast";
+import { api } from "../lib/api";
 
 type User = {
   id: string;
   email: string;
   firstname: string;
   lastname: string;
-  role: 'admin' | 'user';
+  role: "Admin" | "User";
 };
 
 type AuthContextType = {
@@ -28,18 +33,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const { toast } = useToast();
 
   useEffect(() => {
-    const storedToken = localStorage.getItem('auth_token');
+    const storedToken = localStorage.getItem("auth_token");
     if (storedToken) {
       setToken(storedToken);
-      
+
       // If it's a mock token, create a mock user
-      if (storedToken === 'mock-jwt-token') {
+      if (storedToken === "mock-jwt-token") {
         setUser({
-          id: 'mock-user-id',
-          email: 'admin@example.com',
-          firstname: 'Admin',
-          lastname: 'User',
-          role: 'admin'
+          id: "mock-user-id",
+          email: "admin@example.com",
+          firstname: "Admin",
+          lastname: "User",
+          role: "Admin",
         });
         setLoading(false);
       } else {
@@ -53,15 +58,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const fetchUser = async (authToken: string) => {
     try {
       setLoading(true);
-      const response = await api.get('/api/auth/profile', {
+      const response = await api.get("/api/auth/profile", {
         headers: {
-          Authorization: `Bearer ${authToken}`
-        }
+          Authorization: `Bearer ${authToken}`,
+        },
       });
       setUser(response.data.user);
     } catch (error) {
-      console.error('Error fetching user:', error);
-      localStorage.removeItem('auth_token');
+      console.error("Error fetching user:", error);
+      localStorage.removeItem("auth_token");
       setToken(null);
     } finally {
       setLoading(false);
@@ -71,19 +76,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const login = async (email: string, password: string) => {
     try {
       setLoading(true);
-      const response = await api.post('/api/auth/login', { email, password });
+      const response = await api.post("/api/auth/login", { email, password });
       const { token: authToken, user: userData } = response.data;
-      
-      localStorage.setItem('auth_token', authToken);
+
+      localStorage.setItem("auth_token", authToken);
       setToken(authToken);
       setUser(userData);
-      
+
       toast({
         title: "Login successful",
         description: `Welcome back, ${userData.firstname}!`,
       });
     } catch (error: any) {
-      console.error('Login error:', error);
+      console.error("Login error:", error);
       toast({
         title: "Login failed",
         description: error.response?.data?.error || "Invalid credentials",
@@ -96,7 +101,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const logout = () => {
-    localStorage.removeItem('auth_token');
+    localStorage.removeItem("auth_token");
     setUser(null);
     setToken(null);
     toast({
@@ -115,7 +120,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
 };

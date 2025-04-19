@@ -1,16 +1,20 @@
 
 import React from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { Skeleton } from "@/components/ui/skeleton";
 
 type ProtectedRouteProps = {
   children: React.ReactNode;
-  requiredRole?: 'admin' | 'user';
+  requiredRole?: 'Admin' | 'User';
 };
 
 const ProtectedRoute = ({ children, requiredRole }: ProtectedRouteProps) => {
   const { user, loading } = useAuth();
+  const location = useLocation();
+
+  // Special case for settings page - allow access without authentication
+  const isSettingsPage = location.pathname === '/settings';
 
   if (loading) {
     return (
@@ -24,11 +28,16 @@ const ProtectedRoute = ({ children, requiredRole }: ProtectedRouteProps) => {
     );
   }
 
+  // Allow access to settings page without authentication
+  if (isSettingsPage) {
+    return <>{children}</>;
+  }
+
   if (!user) {
     return <Navigate to="/login" replace />;
   }
 
-  if (requiredRole === 'admin' && user.role !== 'admin') {
+  if (requiredRole === 'Admin' && user.role !== 'Admin') {
     return <Navigate to="/dashboard" replace />;
   }
 

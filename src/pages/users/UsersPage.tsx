@@ -1,92 +1,24 @@
-import React, { useState } from 'react';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import React, { useState, useCallback } from 'react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { 
-  Loader2, 
-  Plus, 
-  MoreVertical, 
-  FileOutput,
-  Trash2,
-  FileEdit,
-  KeyRound
-} from "lucide-react";
-import { useUsersApi, User } from '@/hooks/useUsersApi';
-import { useForm, Controller } from 'react-hook-form';
+import { Plus } from "lucide-react";
+import { useUsersApi } from '@/hooks/useUsersApi';
 import { format } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
-import { useAuth } from '@/hooks/useAuth';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { 
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle
-} from "@/components/ui/alert-dialog";
 import { exportToExcel, exportToPdf } from '@/lib/exportUtils';
+import { useUserDialogs } from '@/hooks/useUserDialogs';
 import SearchExportHeader from '@/components/SearchExportHeader';
 import UsersAdvancedSearch from '@/components/users/UsersAdvancedSearch';
-
-type UserFormValues = {
-  email: string;
-  password: string;
-  firstname: string;
-  lastname: string;
-  role: 'Admin' | 'User';
-};
-
-type UpdateUserFormValues = {
-  email: string;
-  firstname: string;
-  lastname: string;
-  role: 'Admin' | 'User';
-};
-
-type PasswordFormValues = {
-  currentPassword: string;
-  newPassword: string;
-  confirmPassword: string;
-};
-
-type DeleteFormValues = {
-  reason: string;
-};
+import TablePagination from '@/components/TablePagination';
+import { useUsersFiltering } from '@/hooks/useUsersFiltering';
+import UserDetailsDialog from '@/components/users/UserDetailsDialog';
+import NewUserDialog from '@/components/users/NewUserDialog';
+import EditUserDialog from '@/components/users/EditUserDialog';
+import PasswordDialog from '@/components/users/PasswordDialog';
+import DeleteUserDialog from '@/components/users/DeleteUserDialog';
+import UsersTable from '@/components/users/UsersTable';
 
 const UsersPage: React.FC = () => {
-  const { user: currentUser } = useAuth();
   const { 
     useUsers, 
     useCreateUser, 
@@ -101,39 +33,64 @@ const UsersPage: React.FC = () => {
   const { mutate: updatePassword, isPending: isUpdatingPassword } = useUpdatePassword();
   const { mutate: deleteUser, isPending: isDeleting } = useDeleteUser();
   
+  const {
+    selectedUser,
+    showDetailsDialog,
+    showEditUserForm,
+    showPasswordForm,
+    showDeleteDialog,
+    handleCloseEditForm,
+    handleClosePasswordForm,
+    handleCloseDeleteDialog,
+    handleCloseDetailsDialog,
+    openDetailsDialog,
+    openEditDialog,
+    openPasswordDialog,
+    openDeleteDialog,
+  } = useUserDialogs();
+
+  const {
+    searchQuery,
+    setSearchQuery,
+    filters,
+    currentPage,
+    pageSize,
+    totalItems,
+    paginatedUsers,
+    handlePageChange,
+    handlePageSizeChange,
+    handleFilterChange: handleAdvancedFilterChange,
+    resetFilters,
+    sortConfig,
+    handleSort
+  } = useUsersFiltering(users);
+  
   const [showNewUserForm, setShowNewUserForm] = useState(false);
-  const [showEditUserForm, setShowEditUserForm] = useState(false);
-  const [showPasswordForm, setShowPasswordForm] = useState(false);
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [selectedUser, setSelectedUser] = useState<User | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [filters, setFilters] = useState<{
-    role?: string;
-    status?: string;
-  }>({});
 
-  const { register: registerNew, handleSubmit: handleSubmitNew, reset: resetNew, control: controlNew, formState: { errors: errorsNew } } = useForm<UserFormValues>();
-  const { register: registerEdit, handleSubmit: handleSubmitEdit, reset: resetEdit, control: controlEdit, formState: { errors: errorsEdit }, setValue: setValueEdit } = useForm<UpdateUserFormValues>();
-  const { register: registerPassword, handleSubmit: handleSubmitPassword, reset: resetPassword, formState: { errors: errorsPassword } } = useForm<PasswordFormValues>();
-  const { register: registerDelete, handleSubmit: handleSubmitDelete, reset: resetDelete, formState: { errors: errorsDelete } } = useForm<DeleteFormValues>();
+  const handleCloseNewUserForm = useCallback(() => {
+    setShowNewUserForm(false);
+  }, []);
 
-  const handleCreate = (data: UserFormValues) => {
-    createUser(data, {
+  const handleCreate = (userData: any) => {
+    createUser(userData, {
       onSuccess: () => {
-        resetNew();
-        setShowNewUserForm(false);
-      },
-      onError: (error: any) => {
+        handleCloseNewUserForm();
         toast({
-          title: 'Error',
-          description: error.response?.data?.error || 'Failed to create user',
-          variant: 'destructive'
+          title: "User created",
+          description: "The user has been created successfully",
         });
-      }
+      },
+      onError: (error) => {
+        toast({
+          title: "Error",
+          description: `Failed to create user: ${error.message}`,
+          variant: "destructive",
+        });
+      },
     });
   };
 
-  const handleEdit = (data: UpdateUserFormValues) => {
+  const handleEdit = (data: any) => {
     if (!selectedUser) return;
     
     updateUser({
@@ -141,29 +98,24 @@ const UsersPage: React.FC = () => {
       data
     }, {
       onSuccess: () => {
-        resetEdit();
-        setShowEditUserForm(false);
-        setSelectedUser(null);
-      },
-      onError: (error: any) => {
+        handleCloseEditForm();
         toast({
-          title: 'Error',
-          description: error.response?.data?.error || 'Failed to update user',
-          variant: 'destructive'
+          title: "User updated",
+          description: "The user has been updated successfully",
         });
-      }
+      },
+      onError: (error) => {
+        toast({
+          title: "Error",
+          description: `Failed to update user: ${error.message}`,
+          variant: "destructive",
+        });
+      },
     });
   };
 
-  const handlePasswordUpdate = (data: PasswordFormValues) => {
-    if (!selectedUser || data.newPassword !== data.confirmPassword) {
-      toast({
-        title: 'Error',
-        description: 'Passwords do not match',
-        variant: 'destructive'
-      });
-      return;
-    }
+  const handlePasswordUpdate = (data: any) => {
+    if (!selectedUser) return;
     
     updatePassword({
       id: selectedUser._id,
@@ -171,21 +123,23 @@ const UsersPage: React.FC = () => {
       newPassword: data.newPassword
     }, {
       onSuccess: () => {
-        resetPassword();
-        setShowPasswordForm(false);
-        setSelectedUser(null);
-      },
-      onError: (error: any) => {
+        handleClosePasswordForm();
         toast({
-          title: 'Error',
-          description: error.response?.data?.error || 'Failed to update password',
-          variant: 'destructive'
+          title: "Password updated",
+          description: "The password has been updated successfully",
         });
-      }
+      },
+      onError: (error) => {
+        toast({
+          title: "Error",
+          description: `Failed to update password: ${error.message}`,
+          variant: "destructive",
+        });
+      },
     });
   };
 
-  const handleDelete = (data: DeleteFormValues) => {
+  const handleDelete = (data: any) => {
     if (!selectedUser) return;
     
     deleteUser({
@@ -193,74 +147,21 @@ const UsersPage: React.FC = () => {
       reason: data.reason
     }, {
       onSuccess: () => {
-        resetDelete();
-        setShowDeleteDialog(false);
-        setSelectedUser(null);
-      },
-      onError: (error: any) => {
+        handleCloseDeleteDialog();
         toast({
-          title: 'Error',
-          description: error.response?.data?.error || 'Failed to delete user',
-          variant: 'destructive'
+          title: "User deleted",
+          description: "The user has been deleted successfully",
         });
-      }
+      },
+      onError: (error) => {
+        toast({
+          title: "Error",
+          description: `Failed to delete user: ${error.message}`,
+          variant: "destructive",
+        });
+      },
     });
   };
-
-  const openEditForm = (user: User) => {
-    setSelectedUser(user);
-    setValueEdit('email', user.email);
-    setValueEdit('firstname', user.firstname);
-    setValueEdit('lastname', user.lastname);
-    setValueEdit('role', user.role as 'Admin' | 'User');
-    setShowEditUserForm(true);
-  };
-
-  const getStatusBadgeClass = (status: string) => {
-    switch (status) {
-      case 'Active':
-        return 'bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs';
-      case 'Deleted':
-        return 'bg-red-100 text-red-800 px-2 py-1 rounded-full text-xs';
-      default:
-        return 'bg-gray-100 text-gray-800 px-2 py-1 rounded-full text-xs';
-    }
-  };
-
-  const getRoleBadgeClass = (role: string) => {
-    switch (role) {
-      case 'Admin':
-        return 'bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs';
-      case 'User':
-        return 'bg-purple-100 text-purple-800 px-2 py-1 rounded-full text-xs';
-      default:
-        return 'bg-gray-100 text-gray-800 px-2 py-1 rounded-full text-xs';
-    }
-  };
-
-  const handleFilterChange = (key: string, value: string) => {
-    setFilters(prev => ({
-      ...prev,
-      [key]: value === 'all' ? undefined : value
-    }));
-  };
-
-  const handleResetFilters = () => {
-    setFilters({});
-  };
-
-  const filteredUsers = users?.filter((user: User) => {
-    const matchesSearch = !searchQuery || 
-      user.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      user.firstname.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      user.lastname.toLowerCase().includes(searchQuery.toLowerCase());
-    
-    const matchesRole = !filters.role || user.role === filters.role;
-    
-    const matchesStatus = !filters.status || user.status === filters.status;
-    
-    return matchesSearch && matchesRole && matchesStatus;
-  });
 
   const exportUsersToExcel = () => {
     const columns = [
@@ -272,7 +173,7 @@ const UsersPage: React.FC = () => {
       { header: 'Created', key: 'createdAt', width: 15 },
     ];
 
-    const formattedData = filteredUsers.map(user => ({
+    const formattedData = paginatedUsers.map(user => ({
       ...user,
       createdAt: format(new Date(user.createdAt), 'yyyy-MM-dd')
     }));
@@ -288,7 +189,7 @@ const UsersPage: React.FC = () => {
       { header: 'Status', key: 'status' },
     ];
 
-    const formattedData = filteredUsers.map(user => ({
+    const formattedData = paginatedUsers.map(user => ({
       ...user,
       fullname: `${user.firstname} ${user.lastname}`
     }));
@@ -309,8 +210,8 @@ const UsersPage: React.FC = () => {
         advancedSearchContent={
           <UsersAdvancedSearch
             filters={filters}
-            onFilterChange={handleFilterChange}
-            onReset={handleResetFilters}
+            onFilterChange={handleAdvancedFilterChange}
+            onReset={resetFilters}
           />
         }
         actionButton={
@@ -327,437 +228,66 @@ const UsersPage: React.FC = () => {
           <CardDescription>Manage system users and their access levels</CardDescription>
         </CardHeader>
         <CardContent>
-          {isLoading ? (
-            <div className="flex justify-center py-4">
-              <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Role</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Created</TableHead>
-                    <TableHead className="w-[100px]">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredUsers && filteredUsers.length > 0 ? (
-                    filteredUsers.map((user: User) => (
-                      <TableRow key={user._id}>
-                        <TableCell>
-                          {user.firstname} {user.lastname}
-                        </TableCell>
-                        <TableCell>{user.email}</TableCell>
-                        <TableCell>
-                          <span className={getRoleBadgeClass(user.role)}>
-                            {user.role}
-                          </span>
-                        </TableCell>
-                        <TableCell>
-                          <span className={getStatusBadgeClass(user.status)}>
-                            {user.status}
-                          </span>
-                        </TableCell>
-                        <TableCell>
-                          {format(new Date(user.createdAt), 'yyyy-MM-dd')}
-                        </TableCell>
-                        <TableCell>
-                          {user.status === 'Active' && (
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon">
-                                  <MoreVertical className="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuItem
-                                  onClick={() => openEditForm(user)}
-                                >
-                                  <FileEdit className="mr-2 h-4 w-4" />
-                                  Edit
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  onClick={() => {
-                                    setSelectedUser(user);
-                                    setShowPasswordForm(true);
-                                  }}
-                                >
-                                  <KeyRound className="mr-2 h-4 w-4" />
-                                  Change Password
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  onClick={() => {
-                                    setSelectedUser(user);
-                                    setShowDeleteDialog(true);
-                                  }}
-                                  className="text-red-600"
-                                  disabled={currentUser?.id === user._id}
-                                >
-                                  <Trash2 className="mr-2 h-4 w-4" />
-                                  Delete
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  ) : (
-                    <TableRow>
-                      <TableCell colSpan={6} className="text-center py-4">
-                        No users found.
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </div>
-          )}
+          <UsersTable
+            users={paginatedUsers}
+            isLoading={isLoading}
+            sortConfig={sortConfig}
+            onSort={handleSort}
+            onViewUser={openDetailsDialog}
+            onEditUser={openEditDialog}
+            onPasswordChange={openPasswordDialog}
+            onDeleteUser={openDeleteDialog}
+          />
+          <TablePagination
+            currentPage={currentPage}
+            totalItems={totalItems}
+            pageSize={pageSize}
+            onPageChange={handlePageChange}
+            onPageSizeChange={handlePageSizeChange}
+          />
         </CardContent>
       </Card>
 
-      {/* New User Dialog */}
-      <Dialog open={showNewUserForm} onOpenChange={setShowNewUserForm}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Create New User</DialogTitle>
-            <DialogDescription>
-              Create a new user account
-            </DialogDescription>
-          </DialogHeader>
-          <form onSubmit={handleSubmitNew(handleCreate)} className="space-y-4 py-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <label htmlFor="firstname" className="text-sm font-medium">
-                  First Name
-                </label>
-                <Input
-                  id="firstname"
-                  {...registerNew("firstname", { required: "First name is required" })}
-                  className={errorsNew.firstname ? "border-red-500" : ""}
-                />
-                {errorsNew.firstname && (
-                  <p className="text-red-500 text-sm">{errorsNew.firstname.message}</p>
-                )}
-              </div>
-              
-              <div className="space-y-2">
-                <label htmlFor="lastname" className="text-sm font-medium">
-                  Last Name
-                </label>
-                <Input
-                  id="lastname"
-                  {...registerNew("lastname", { required: "Last name is required" })}
-                  className={errorsNew.lastname ? "border-red-500" : ""}
-                />
-                {errorsNew.lastname && (
-                  <p className="text-red-500 text-sm">{errorsNew.lastname.message}</p>
-                )}
-              </div>
-            </div>
-            
-            <div className="space-y-2">
-              <label htmlFor="email" className="text-sm font-medium">
-                Email
-              </label>
-              <Input
-                id="email"
-                type="email"
-                {...registerNew("email", { required: "Email is required" })}
-                className={errorsNew.email ? "border-red-500" : ""}
-              />
-              {errorsNew.email && (
-                <p className="text-red-500 text-sm">{errorsNew.email.message}</p>
-              )}
-            </div>
-            
-            <div className="space-y-2">
-              <label htmlFor="password" className="text-sm font-medium">
-                Password
-              </label>
-              <Input
-                id="password"
-                type="password"
-                {...registerNew("password", { required: "Password is required" })}
-                className={errorsNew.password ? "border-red-500" : ""}
-              />
-              {errorsNew.password && (
-                <p className="text-red-500 text-sm">{errorsNew.password.message}</p>
-              )}
-            </div>
-            
-            <div className="space-y-2">
-              <label htmlFor="role" className="text-sm font-medium">
-                Role
-              </label>
-              <Controller
-                name="role"
-                control={controlNew}
-                defaultValue="User"
-                rules={{ required: "Role is required" }}
-                render={({ field }) => (
-                  <Select 
-                    onValueChange={field.onChange} 
-                    defaultValue={field.value}
-                  >
-                    <SelectTrigger className={errorsNew.role ? "border-red-500" : ""}>
-                      <SelectValue placeholder="Select a role" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="User">User</SelectItem>
-                      <SelectItem value="Admin">Admin</SelectItem>
-                    </SelectContent>
-                  </Select>
-                )}
-              />
-              {errorsNew.role && (
-                <p className="text-red-500 text-sm">{errorsNew.role.message}</p>
-              )}
-            </div>
-            
-            <DialogFooter>
-              <Button 
-                type="button" 
-                variant="outline" 
-                onClick={() => {
-                  resetNew();
-                  setShowNewUserForm(false);
-                }}
-              >
-                Cancel
-              </Button>
-              <Button type="submit" disabled={isCreating}>
-                {isCreating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
-                Create User
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <NewUserDialog
+        open={showNewUserForm}
+        onOpenChange={handleCloseNewUserForm}
+        onSubmit={handleCreate}
+        isCreating={isCreating}
+      />
 
-      {/* Edit User Dialog */}
-      <Dialog open={showEditUserForm} onOpenChange={setShowEditUserForm}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Edit User</DialogTitle>
-            <DialogDescription>
-              Update user details
-            </DialogDescription>
-          </DialogHeader>
-          <form onSubmit={handleSubmitEdit(handleEdit)} className="space-y-4 py-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <label htmlFor="firstname" className="text-sm font-medium">
-                  First Name
-                </label>
-                <Input
-                  id="firstname"
-                  {...registerEdit("firstname", { required: "First name is required" })}
-                  className={errorsEdit.firstname ? "border-red-500" : ""}
-                />
-                {errorsEdit.firstname && (
-                  <p className="text-red-500 text-sm">{errorsEdit.firstname.message}</p>
-                )}
-              </div>
-              
-              <div className="space-y-2">
-                <label htmlFor="lastname" className="text-sm font-medium">
-                  Last Name
-                </label>
-                <Input
-                  id="lastname"
-                  {...registerEdit("lastname", { required: "Last name is required" })}
-                  className={errorsEdit.lastname ? "border-red-500" : ""}
-                />
-                {errorsEdit.lastname && (
-                  <p className="text-red-500 text-sm">{errorsEdit.lastname.message}</p>
-                )}
-              </div>
-            </div>
-            
-            <div className="space-y-2">
-              <label htmlFor="email" className="text-sm font-medium">
-                Email
-              </label>
-              <Input
-                id="email"
-                type="email"
-                {...registerEdit("email", { required: "Email is required" })}
-                className={errorsEdit.email ? "border-red-500" : ""}
-              />
-              {errorsEdit.email && (
-                <p className="text-red-500 text-sm">{errorsEdit.email.message}</p>
-              )}
-            </div>
-            
-            <div className="space-y-2">
-              <label htmlFor="role" className="text-sm font-medium">
-                Role
-              </label>
-              <Controller
-                name="role"
-                control={controlEdit}
-                rules={{ required: "Role is required" }}
-                render={({ field }) => (
-                  <Select 
-                    onValueChange={field.onChange} 
-                    value={field.value}
-                  >
-                    <SelectTrigger className={errorsEdit.role ? "border-red-500" : ""}>
-                      <SelectValue placeholder="Select a role" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="User">User</SelectItem>
-                      <SelectItem value="Admin">Admin</SelectItem>
-                    </SelectContent>
-                  </Select>
-                )}
-              />
-              {errorsEdit.role && (
-                <p className="text-red-500 text-sm">{errorsEdit.role.message}</p>
-              )}
-            </div>
-            
-            <DialogFooter>
-              <Button 
-                type="button" 
-                variant="outline" 
-                onClick={() => {
-                  resetEdit();
-                  setShowEditUserForm(false);
-                  setSelectedUser(null);
-                }}
-              >
-                Cancel
-              </Button>
-              <Button type="submit" disabled={isUpdating}>
-                {isUpdating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileEdit className="mr-2 h-4 w-4" />}
-                Update User
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      {selectedUser && (
+        <>
+          <EditUserDialog
+            user={selectedUser}
+            open={showEditUserForm}
+            onOpenChange={handleCloseEditForm}
+            onSubmit={handleEdit}
+            isUpdating={isUpdating}
+          />
 
-      {/* Change Password Dialog */}
-      <Dialog open={showPasswordForm} onOpenChange={setShowPasswordForm}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Change Password</DialogTitle>
-            <DialogDescription>
-              Update password for {selectedUser?.firstname} {selectedUser?.lastname}
-            </DialogDescription>
-          </DialogHeader>
-          <form onSubmit={handleSubmitPassword(handlePasswordUpdate)} className="space-y-4 py-4">
-            <div className="space-y-2">
-              <label htmlFor="currentPassword" className="text-sm font-medium">
-                Current Password
-              </label>
-              <Input
-                id="currentPassword"
-                type="password"
-                {...registerPassword("currentPassword", { required: "Current password is required" })}
-                className={errorsPassword.currentPassword ? "border-red-500" : ""}
-              />
-              {errorsPassword.currentPassword && (
-                <p className="text-red-500 text-sm">{errorsPassword.currentPassword.message}</p>
-              )}
-            </div>
-            
-            <div className="space-y-2">
-              <label htmlFor="newPassword" className="text-sm font-medium">
-                New Password
-              </label>
-              <Input
-                id="newPassword"
-                type="password"
-                {...registerPassword("newPassword", { required: "New password is required" })}
-                className={errorsPassword.newPassword ? "border-red-500" : ""}
-              />
-              {errorsPassword.newPassword && (
-                <p className="text-red-500 text-sm">{errorsPassword.newPassword.message}</p>
-              )}
-            </div>
-            
-            <div className="space-y-2">
-              <label htmlFor="confirmPassword" className="text-sm font-medium">
-                Confirm New Password
-              </label>
-              <Input
-                id="confirmPassword"
-                type="password"
-                {...registerPassword("confirmPassword", { required: "Password confirmation is required" })}
-                className={errorsPassword.confirmPassword ? "border-red-500" : ""}
-              />
-              {errorsPassword.confirmPassword && (
-                <p className="text-red-500 text-sm">{errorsPassword.confirmPassword.message}</p>
-              )}
-            </div>
-            
-            <DialogFooter>
-              <Button 
-                type="button" 
-                variant="outline" 
-                onClick={() => {
-                  resetPassword();
-                  setShowPasswordForm(false);
-                  setSelectedUser(null);
-                }}
-              >
-                Cancel
-              </Button>
-              <Button type="submit" disabled={isUpdatingPassword}>
-                {isUpdatingPassword ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <KeyRound className="mr-2 h-4 w-4" />}
-                Update Password
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+          <PasswordDialog
+            user={selectedUser}
+            open={showPasswordForm}
+            onOpenChange={handleClosePasswordForm}
+            onSubmit={handlePasswordUpdate}
+            isUpdating={isUpdatingPassword}
+          />
 
-      {/* Delete User Dialog */}
-      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete User</AlertDialogTitle>
-            <AlertDialogDescription>
-              This action cannot be undone. Please provide a reason for deletion.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <form onSubmit={handleSubmitDelete(handleDelete)}>
-            <div className="space-y-4 py-4">
-              <Textarea
-                placeholder="Reason for deletion..."
-                {...registerDelete("reason", { required: "Reason is required" })}
-                className={errorsDelete.reason ? "border-red-500" : ""}
-              />
-              {errorsDelete.reason && (
-                <p className="text-red-500 text-sm">{errorsDelete.reason.message}</p>
-              )}
-            </div>
-            <AlertDialogFooter>
-              <AlertDialogCancel 
-                onClick={() => {
-                  resetDelete();
-                  setSelectedUser(null);
-                }}
-              >
-                Cancel
-              </AlertDialogCancel>
-              <AlertDialogAction asChild>
-                <Button type="submit" variant="destructive" disabled={isDeleting}>
-                  {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
-                  Delete User
-                </Button>
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </form>
-        </AlertDialogContent>
-      </AlertDialog>
+          <DeleteUserDialog
+            user={selectedUser}
+            open={showDeleteDialog}
+            onOpenChange={handleCloseDeleteDialog}
+            onSubmit={handleDelete}
+            isDeleting={isDeleting}
+          />
+
+          <UserDetailsDialog
+            user={selectedUser}
+            open={showDetailsDialog}
+            onOpenChange={handleCloseDetailsDialog}
+          />
+        </>
+      )}
     </div>
   );
 };

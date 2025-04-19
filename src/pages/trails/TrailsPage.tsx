@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import {
   Card,
@@ -36,13 +35,21 @@ import {
   SlidersHorizontal, 
   FileOutput, 
   Loader2, 
-  History 
+  History,
+  Eye
 } from "lucide-react";
-import { useTrailsApi, TrailFilter } from '@/hooks/useTrailsApi';
+import { useTrailsApi, TrailFilter, Trail } from '@/hooks/useTrailsApi';
 import { useUsersApi } from '@/hooks/useUsersApi';
 import { format } from 'date-fns';
 import { exportToExcel, exportToPdf } from '@/lib/exportUtils';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import TrailDetailsDialog from '@/components/trails/TrailDetailsDialog';
 
 const TrailsPage = () => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -52,6 +59,9 @@ const TrailsPage = () => {
   
   const { data: trails = [], isLoading } = useTrails(filters);
   const { data: users = [] } = useUsers();
+
+  const [selectedTrail, setSelectedTrail] = useState<Trail | null>(null);
+  const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   
   const filteredTrails = trails.filter((trail: any) => {
     if (!searchQuery) return true;
@@ -283,6 +293,7 @@ const TrailsPage = () => {
                     <TableHead>Entity</TableHead>
                     <TableHead>Details</TableHead>
                     <TableHead>IP</TableHead>
+                    <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -301,11 +312,34 @@ const TrailsPage = () => {
                           {trail.details}
                         </TableCell>
                         <TableCell>{trail.ip}</TableCell>
+                        <TableCell>
+                          <TooltipProvider>
+                            <div className="flex items-center gap-2">
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => {
+                                      setSelectedTrail(trail);
+                                      setIsDetailsOpen(true);
+                                    }}
+                                  >
+                                    <Eye className="h-4 w-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>View details</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </div>
+                          </TooltipProvider>
+                        </TableCell>
                       </TableRow>
                     ))
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center py-4">
+                      <TableCell colSpan={7} className="text-center py-4">
                         No audit trails found matching your criteria.
                       </TableCell>
                     </TableRow>
@@ -316,6 +350,12 @@ const TrailsPage = () => {
           )}
         </CardContent>
       </Card>
+
+      <TrailDetailsDialog
+        trail={selectedTrail}
+        open={isDetailsOpen}
+        onOpenChange={setIsDetailsOpen}
+      />
     </div>
   );
 };
