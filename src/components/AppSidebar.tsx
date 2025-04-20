@@ -30,6 +30,7 @@ import {
   Menu
 } from "lucide-react";
 import { Button } from './ui/button';
+import { SheetTitle, SheetDescription } from './ui/sheet';
 
 const AppSidebar = () => {
   const location = useLocation();
@@ -57,6 +58,7 @@ const AppSidebar = () => {
       <button 
         className="fixed left-4 top-4 z-50 md:hidden bg-white p-2 rounded-lg shadow-md"
         onClick={() => setOpenMobile(true)}
+        aria-label="Open mobile menu"
       >
         <Menu className="h-5 w-5" />
       </button>
@@ -74,6 +76,7 @@ const AppSidebar = () => {
               size="icon" 
               onClick={toggleSidebar}
               className="h-7 w-7 hidden md:flex"
+              aria-label={state === "collapsed" ? "Expand sidebar" : "Collapse sidebar"}
             >
               {state === "collapsed" ? (
                 <ChevronRight className="h-4 w-4" />
@@ -111,6 +114,7 @@ const AppSidebar = () => {
             variant="secondary" 
             size="icon" 
             className="h-10 w-10 rounded-full shadow-lg"
+            aria-label="Expand sidebar"
           >
             <PanelLeft className="h-5 w-5" />
           </Button>
@@ -121,4 +125,3 @@ const AppSidebar = () => {
 };
 
 export default AppSidebar;
-
