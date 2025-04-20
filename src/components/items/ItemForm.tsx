@@ -43,6 +43,7 @@ const ItemForm: React.FC<ItemFormProps> = ({
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [isCameraLoading, setIsCameraLoading] = useState(false);
+  const [facingMode, setFacingMode] = useState<string>("environment"); // Default to back camera
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const isMobile = useIsMobile();
@@ -102,26 +103,59 @@ const ItemForm: React.FC<ItemFormProps> = ({
     setCameraError(null);
   };
 
-  const startCameraPreview = async () => {
+  const toggleCamera = () => {
+    // Toggle between front and back camera
+    const newFacingMode = facingMode === "environment" ? "user" : "environment";
+    setFacingMode(newFacingMode);
+    
+    // If camera is already open, restart it with the new facing mode
+    if (showCameraPreview) {
+      stopCameraStream();
+      setTimeout(() => startCameraPreview(newFacingMode), 300);
+    }
+  };
+
+  const startCameraPreview = async (requestedFacingMode: string = facingMode) => {
     stopCameraStream();
     setCameraError(null);
     setIsCameraLoading(true);
     
     try {
+      console.log('Starting camera with facing mode:', requestedFacingMode);
+      
+      // Set the new facing mode
+      setFacingMode(requestedFacingMode);
+      
       // Try to get user media with appropriate constraints for mobile
-      const constraints = {
+      const constraints: MediaStreamConstraints = {
         video: {
-          facingMode: isMobile ? "environment" : "user", // Use back camera on mobile
+          facingMode: requestedFacingMode,
           width: { ideal: 1280 },
           height: { ideal: 720 }
         }
       };
       
+      console.log('Requesting media with constraints:', JSON.stringify(constraints));
+      
+      // First check if getUserMedia is available
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error('Browser does not support camera access');
+      }
+      
       const mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+      console.log('Media stream obtained successfully');
       setStream(mediaStream);
       
       if (videoRef.current) {
         videoRef.current.srcObject = mediaStream;
+        videoRef.current.onloadedmetadata = () => {
+          if (videoRef.current) {
+            videoRef.current.play().catch(error => {
+              console.error('Error playing video:', error);
+              setCameraError('Error playing video: ' + error.message);
+            });
+          }
+        };
         setShowCameraPreview(true);
       }
     } catch (error) {
@@ -130,14 +164,22 @@ const ItemForm: React.FC<ItemFormProps> = ({
       
       if (error instanceof DOMException) {
         if (error.name === 'NotAllowedError') {
-          errorMessage = 'Camera access was denied. Please allow camera permissions.';
+          errorMessage = 'Camera access was denied. Please allow camera permissions in your browser settings.';
         } else if (error.name === 'NotFoundError') {
           errorMessage = 'No camera found on this device.';
         } else if (error.name === 'NotReadableError') {
           errorMessage = 'Camera is already in use by another application.';
         } else if (error.name === 'OverconstrainedError') {
-          errorMessage = 'Camera does not meet required constraints.';
+          errorMessage = 'Camera does not meet required constraints. Try switching cameras.';
+        } else if (error.name === 'SecurityError') {
+          errorMessage = 'Camera access is restricted by your browser security settings.';
+        } else if (error.name === 'TypeError') {
+          errorMessage = 'Invalid camera constraints or parameters.';
+        } else {
+          errorMessage = `Camera error: ${error.name}: ${error.message}`;
         }
+      } else if (error instanceof Error) {
+        errorMessage = error.message;
       }
       
       setCameraError(errorMessage);
@@ -246,6 +288,14 @@ const ItemForm: React.FC<ItemFormProps> = ({
                     </Button>
                     <Button
                       type="button"
+                      variant="outline"
+                      onClick={toggleCamera}
+                    >
+                      <Camera className="mr-2 h-4 w-4" />
+                      Switch Camera
+                    </Button>
+                    <Button
+                      type="button"
                       variant="secondary"
                       onClick={stopCameraStream}
                     >
@@ -284,7 +334,7 @@ const ItemForm: React.FC<ItemFormProps> = ({
                     <Button 
                       type="button" 
                       variant="outline"
-                      onClick={startCameraPreview}
+                      onClick={() => startCameraPreview()}
                       disabled={isCameraLoading}
                     >
                       {isCameraLoading ? (
@@ -307,6 +357,7 @@ const ItemForm: React.FC<ItemFormProps> = ({
                     <input
                       type="file"
                       accept="image/*"
+                      capture="environment"
                       className="hidden"
                       ref={fileInputRef}
                       onChange={handleFileUpload}
