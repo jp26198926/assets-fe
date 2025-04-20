@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { Camera, Upload, X, CameraOff } from 'lucide-react';
@@ -59,7 +58,6 @@ const ItemForm: React.FC<ItemFormProps> = ({
     }
   });
 
-  // Reset form when editingItem changes
   useEffect(() => {
     if (editingItem) {
       setValue('typeId', typeof editingItem.typeId === 'object' ? editingItem.typeId._id : editingItem.typeId);
@@ -82,13 +80,11 @@ const ItemForm: React.FC<ItemFormProps> = ({
     }
   }, [editingItem, setValue, reset]);
 
-  // Clean up camera stream when component unmounts or dialog closes
   useEffect(() => {
     if (!open) {
       stopCameraStream();
     }
     
-    // Cleanup on component unmount
     return () => {
       stopCameraStream();
     };
@@ -104,11 +100,9 @@ const ItemForm: React.FC<ItemFormProps> = ({
   };
 
   const toggleCamera = () => {
-    // Toggle between front and back camera
     const newFacingMode = facingMode === "environment" ? "user" : "environment";
     setFacingMode(newFacingMode);
     
-    // If camera is already open, restart it with the new facing mode
     if (showCameraPreview) {
       stopCameraStream();
       setTimeout(() => startCameraPreview(newFacingMode), 300);
@@ -119,73 +113,55 @@ const ItemForm: React.FC<ItemFormProps> = ({
     stopCameraStream();
     setCameraError(null);
     setIsCameraLoading(true);
+    setShowCameraPreview(true);
     
     try {
       console.log('Starting camera with facing mode:', requestedFacingMode);
       
-      // Set the new facing mode
       setFacingMode(requestedFacingMode);
       
-      // Try to get user media with appropriate constraints for mobile
-      const constraints: MediaStreamConstraints = {
-        video: {
-          facingMode: requestedFacingMode,
-          width: { ideal: 1280 },
-          height: { ideal: 720 }
-        }
-      };
-      
-      console.log('Requesting media with constraints:', JSON.stringify(constraints));
-      
-      // First check if getUserMedia is available
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         throw new Error('Browser does not support camera access');
       }
-      
-      const mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
-      console.log('Media stream obtained successfully');
-      setStream(mediaStream);
-      
-      if (videoRef.current) {
-        videoRef.current.srcObject = mediaStream;
-        videoRef.current.onloadedmetadata = () => {
-          if (videoRef.current) {
-            videoRef.current.play().catch(error => {
-              console.error('Error playing video:', error);
-              setCameraError('Error playing video: ' + error.message);
-            });
+
+      try {
+        const exactConstraints: MediaStreamConstraints = {
+          video: {
+            facingMode: { exact: requestedFacingMode }
           }
         };
-        setShowCameraPreview(true);
+        
+        const mediaStream = await navigator.mediaDevices.getUserMedia(exactConstraints);
+        setStream(mediaStream);
+        
+        if (videoRef.current) {
+          videoRef.current.srcObject = mediaStream;
+          await videoRef.current.play();
+        }
+      } catch (exactError) {
+        console.log('Exact constraints failed, trying ideal constraints');
+        
+        const idealConstraints: MediaStreamConstraints = {
+          video: {
+            facingMode: requestedFacingMode
+          }
+        };
+        
+        const mediaStream = await navigator.mediaDevices.getUserMedia(idealConstraints);
+        setStream(mediaStream);
+        
+        if (videoRef.current) {
+          videoRef.current.srcObject = mediaStream;
+          await videoRef.current.play();
+        }
       }
     } catch (error) {
       console.error('Error accessing camera:', error);
-      let errorMessage = 'Could not access camera';
-      
-      if (error instanceof DOMException) {
-        if (error.name === 'NotAllowedError') {
-          errorMessage = 'Camera access was denied. Please allow camera permissions in your browser settings.';
-        } else if (error.name === 'NotFoundError') {
-          errorMessage = 'No camera found on this device.';
-        } else if (error.name === 'NotReadableError') {
-          errorMessage = 'Camera is already in use by another application.';
-        } else if (error.name === 'OverconstrainedError') {
-          errorMessage = 'Camera does not meet required constraints. Try switching cameras.';
-        } else if (error.name === 'SecurityError') {
-          errorMessage = 'Camera access is restricted by your browser security settings.';
-        } else if (error.name === 'TypeError') {
-          errorMessage = 'Invalid camera constraints or parameters.';
-        } else {
-          errorMessage = `Camera error: ${error.name}: ${error.message}`;
-        }
-      } else if (error instanceof Error) {
-        errorMessage = error.message;
-      }
-      
-      setCameraError(errorMessage);
+      setShowCameraPreview(false);
+      setCameraError(error instanceof Error ? error.message : 'Failed to access camera');
       toast({
         title: 'Camera Error',
-        description: errorMessage,
+        description: error instanceof Error ? error.message : 'Failed to access camera',
         variant: 'destructive'
       });
     } finally {
@@ -212,7 +188,7 @@ const ItemForm: React.FC<ItemFormProps> = ({
       }
       
       ctx.drawImage(videoRef.current, 0, 0);
-      const photoDataUrl = canvas.toDataURL('image/jpeg', 0.8); // Use compression for smaller data size
+      const photoDataUrl = canvas.toDataURL('image/jpeg', 0.8);
       
       setPhotoPreview(photoDataUrl);
       setValue('photo', photoDataUrl);
@@ -230,7 +206,7 @@ const ItemForm: React.FC<ItemFormProps> = ({
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      if (file.size > 5 * 1024 * 1024) { // 5MB limit
+      if (file.size > 5 * 1024 * 1024) {
         toast({
           title: 'File Too Large',
           description: 'Image must be less than 5MB',
@@ -253,6 +229,27 @@ const ItemForm: React.FC<ItemFormProps> = ({
     onSubmit({ ...data, photo: photoPreview });
   };
 
+  const checkCameraAvailability = async () => {
+    try {
+      setIsCameraLoading(true);
+      
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        return false;
+      }
+      
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      
+      stream.getTracks().forEach(track => track.stop());
+      
+      return true;
+    } catch (error) {
+      console.error('Camera availability check failed:', error);
+      return false;
+    } finally {
+      setIsCameraLoading(false);
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={(isOpen) => {
       if (!isOpen) stopCameraStream();
@@ -270,38 +267,47 @@ const ItemForm: React.FC<ItemFormProps> = ({
             <label className="text-sm font-medium">Item Photo</label>
             <div className="flex flex-col items-center gap-4">
               {showCameraPreview ? (
-                <div className="relative w-full max-w-[400px]">
-                  <video
-                    ref={videoRef}
-                    autoPlay
-                    playsInline
-                    muted
-                    className="w-full rounded-lg bg-slate-100"
-                  />
-                  <div className="flex justify-center gap-2 mt-2">
-                    <Button
-                      type="button"
-                      onClick={handleCapture}
-                    >
-                      <Camera className="mr-2 h-4 w-4" />
-                      Capture
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={toggleCamera}
-                    >
-                      <Camera className="mr-2 h-4 w-4" />
-                      Switch Camera
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      onClick={stopCameraStream}
-                    >
-                      Cancel
-                    </Button>
+                <div className="relative w-full">
+                  <div className="aspect-video bg-slate-900 rounded-lg overflow-hidden">
+                    <video
+                      ref={videoRef}
+                      autoPlay
+                      playsInline
+                      muted
+                      className="w-full h-full object-cover"
+                    />
                   </div>
+                  {isCameraLoading ? (
+                    <div className="absolute inset-0 flex items-center justify-center bg-slate-900/50">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
+                    </div>
+                  ) : (
+                    <div className="flex justify-center gap-2 mt-2">
+                      <Button
+                        type="button"
+                        onClick={handleCapture}
+                        variant="default"
+                      >
+                        <Camera className="mr-2 h-4 w-4" />
+                        Capture
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={toggleCamera}
+                      >
+                        <Camera className="mr-2 h-4 w-4" />
+                        Switch Camera
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        onClick={stopCameraStream}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  )}
                 </div>
               ) : photoPreview ? (
                 <div className="relative">
@@ -334,7 +340,20 @@ const ItemForm: React.FC<ItemFormProps> = ({
                     <Button 
                       type="button" 
                       variant="outline"
-                      onClick={() => startCameraPreview()}
+                      onClick={() => {
+                        checkCameraAvailability().then(available => {
+                          if (available) {
+                            startCameraPreview();
+                          } else {
+                            setCameraError("Camera access not available. Please check your browser permissions.");
+                            toast({
+                              title: 'Camera Error',
+                              description: 'Camera access not available. Please check your browser permissions.',
+                              variant: 'destructive'
+                            });
+                          }
+                        });
+                      }}
                       disabled={isCameraLoading}
                     >
                       {isCameraLoading ? (
