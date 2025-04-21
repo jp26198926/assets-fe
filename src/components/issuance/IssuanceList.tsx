@@ -12,7 +12,7 @@ import TablePagination from "@/components/TablePagination";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { AlertDialog, AlertDialogTrigger, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogAction, AlertDialogCancel } from "@/components/ui/alert-dialog";
-import { ArrowLeftRight, Trash, ArrowUpRight, Barcode, Eye, ChevronUp, ChevronDown } from "lucide-react";
+import { ArrowLeftRight, Trash, ArrowUpRight, Barcode, Eye, ChevronUp, ChevronDown, MoreHorizontal } from "lucide-react";
 import { format } from "date-fns";
 import TransferDialog from "./TransferDialog";
 import IssuanceDetailsDialog from "./IssuanceDetailsDialog";
@@ -22,6 +22,11 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  Popover,
+  PopoverTrigger,
+  PopoverContent
+} from "@/components/ui/popover";
 
 interface IssuanceListProps {
   issuances: any[];
@@ -51,6 +56,7 @@ const IssuanceList: React.FC<IssuanceListProps> = ({
   const [isTransferOpen, setIsTransferOpen] = useState(false);
   const [selectedIssuance, setSelectedIssuance] = useState<any>(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+  const [activeActionRow, setActiveActionRow] = useState<string | null>(null);
 
   const startIndex = (currentPage - 1) * pageSize;
   const endIndex = startIndex + pageSize;
@@ -58,7 +64,7 @@ const IssuanceList: React.FC<IssuanceListProps> = ({
 
   const SortableHeader = ({ column, label }: { column: string; label: string }) => (
     <div
-      className="flex items-center cursor-pointer"
+      className="flex items-center cursor-pointer select-none"
       onClick={() => onSort?.(column)}
     >
       <span>{label}</span>
@@ -115,7 +121,138 @@ const IssuanceList: React.FC<IssuanceListProps> = ({
 
   return (
     <div>
-      <div className="rounded-md border">
+      <div className="block md:hidden space-y-3">
+        {isLoading
+          ? Array.from({ length: 3 }).map((_, i) => (
+              <div key={`mob-skel-${i}`} className="p-4 bg-white rounded-md shadow border space-y-2">
+                <Skeleton className="h-5 w-20" />
+                <Skeleton className="h-5 w-40" />
+                <Skeleton className="h-5 w-20" />
+                <Skeleton className="h-5 w-32" />
+              </div>
+            ))
+          : paginatedItems.length > 0
+            ? paginatedItems.map((issuance) => (
+                <div
+                  key={issuance._id}
+                  className="bg-white rounded-md p-4 shadow flex flex-col gap-2 border"
+                >
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-medium text-neutral-600">{formatDate(issuance.date)}</span>
+                    <Badge className={getStatusColor(issuance.status)}>
+                      {issuance.status}
+                    </Badge>
+                  </div>
+                  <div className="font-semibold">{issuance.itemId?.itemName || 'Unknown Item'}</div>
+                  <div className="text-sm text-neutral-600">{issuance.itemId?.typeId?.type || '-'}</div>
+                  <div className="flex justify-between text-xs">
+                    <span>Barcode: {issuance.itemId?.barcodeId || '-'}</span>
+                    <span>{issuance.roomId?.area || '-'}</span>
+                  </div>
+                  <div className="text-xs truncate text-neutral-400">
+                    {issuance.remarks || '-'}
+                  </div>
+                  <div className="flex justify-between items-center mt-2">
+                    <span className="text-xs">
+                      {issuance.updatedAt
+                        ? formatDate(issuance.updatedAt)
+                        : formatDate(issuance.createdAt)
+                      }
+                    </span>
+                    <div>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button variant="outline" size="icon" aria-label="Actions">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent side="left" align="start" className="p-0 w-44">
+                          <div className="flex flex-col">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="justify-start"
+                              onClick={() => {
+                                setSelectedIssuance(issuance);
+                                setIsDetailsOpen(true);
+                              }}
+                            >
+                              <Eye className="mr-2 h-4 w-4" /> View details
+                            </Button>
+                            {issuance.status === 'Active' && (
+                              <>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="justify-start"
+                                  onClick={() => {
+                                    handleTransferClick(issuance._id);
+                                  }}
+                                >
+                                  <ArrowLeftRight className="mr-2 h-4 w-4" />
+                                  Transfer
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="justify-start"
+                                  onClick={() => {
+                                    onSurrender(issuance._id);
+                                  }}
+                                >
+                                  <ArrowUpRight className="mr-2 h-4 w-4" />
+                                  Surrender
+                                </Button>
+                                <AlertDialog>
+                                  <AlertDialogTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="justify-start text-destructive"
+                                    >
+                                      <Trash className="mr-2 h-4 w-4" /> Delete
+                                    </Button>
+                                  </AlertDialogTrigger>
+                                  <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                      <AlertDialogTitle>Delete Issuance</AlertDialogTitle>
+                                      <AlertDialogDescription>
+                                        Are you sure you want to delete this issuance? This will mark the issuance as deleted and set the item status back to active.
+                                      </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                      <AlertDialogAction
+                                        onClick={() => {
+                                          onDelete(issuance._id);
+                                        }}
+                                      >
+                                        Delete
+                                      </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                  </AlertDialogContent>
+                                </AlertDialog>
+                              </>
+                            )}
+                          </div>
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                  </div>
+                </div>
+              ))
+            : (
+                <div className="text-center py-12 text-gray-500">
+                  {searchQuery 
+                    ? `No issuances found for "${searchQuery}"`
+                    : "No issuances found."
+                  }
+                </div>
+              )
+        }
+      </div>
+
+      <div className="hidden md:block rounded-md border overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>
@@ -153,33 +290,11 @@ const IssuanceList: React.FC<IssuanceListProps> = ({
             {isLoading ? (
               Array.from({ length: 5 }).map((_, i) => (
                 <TableRow key={`skeleton-${i}`}>
-                  <TableCell className="py-3">
-                    <Skeleton className="h-6 w-24" />
-                  </TableCell>
-                  <TableCell className="py-3">
-                    <Skeleton className="h-6 w-40" />
-                  </TableCell>
-                  <TableCell className="py-3">
-                    <Skeleton className="h-6 w-32" />
-                  </TableCell>
-                  <TableCell className="py-3">
-                    <Skeleton className="h-6 w-32" />
-                  </TableCell>
-                  <TableCell className="py-3">
-                    <Skeleton className="h-6 w-32" />
-                  </TableCell>
-                  <TableCell className="py-3">
-                    <Skeleton className="h-6 w-24" />
-                  </TableCell>
-                  <TableCell className="py-3">
-                    <Skeleton className="h-6 w-32" />
-                  </TableCell>
-                  <TableCell className="py-3">
-                    <Skeleton className="h-6 w-32" />
-                  </TableCell>
-                  <TableCell className="py-3">
-                    <Skeleton className="h-6 w-24" />
-                  </TableCell>
+                  {Array.from({ length: 9 }).map((_, j) => (
+                    <TableCell key={j} className="py-3">
+                      <Skeleton className="h-6 w-24" />
+                    </TableCell>
+                  ))}
                 </TableRow>
               ))
             ) : paginatedItems.length > 0 ? (
@@ -210,96 +325,89 @@ const IssuanceList: React.FC<IssuanceListProps> = ({
                     {issuance.updatedAt ? formatDate(issuance.updatedAt) : formatDate(issuance.createdAt)}
                   </TableCell>
                   <TableCell>
-                    <TooltipProvider>
-                      <div className="flex items-center gap-2">
-                        <Tooltip>
-                          <TooltipTrigger asChild>
+                    <div>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            aria-label="Row actions"
+                          >
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent side="left" align="center" className="p-0 w-44">
+                          <div className="flex flex-col">
                             <Button
-                              variant="outline"
+                              variant="ghost"
                               size="sm"
+                              className="justify-start"
                               onClick={() => {
                                 setSelectedIssuance(issuance);
                                 setIsDetailsOpen(true);
                               }}
                             >
-                              <Eye className="h-4 w-4" />
+                              <Eye className="mr-2 h-4 w-4" /> View details
                             </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p>View details</p>
-                          </TooltipContent>
-                        </Tooltip>
-
-                        {issuance.status === 'Active' && (
-                          <>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
+                            {issuance.status === 'Active' && (
+                              <>
                                 <Button
-                                  variant="outline"
+                                  variant="ghost"
                                   size="sm"
-                                  onClick={() => handleTransferClick(issuance._id)}
+                                  className="justify-start"
+                                  onClick={() => {
+                                    handleTransferClick(issuance._id);
+                                  }}
                                 >
-                                  <ArrowLeftRight className="h-4 w-4" />
+                                  <ArrowLeftRight className="mr-2 h-4 w-4" />
+                                  Transfer
                                 </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p>Transfer item to another area</p>
-                              </TooltipContent>
-                            </Tooltip>
-
-                            <Tooltip>
-                              <TooltipTrigger asChild>
                                 <Button
-                                  variant="outline"
+                                  variant="ghost"
                                   size="sm"
-                                  onClick={() => onSurrender(issuance._id)}
+                                  className="justify-start"
+                                  onClick={() => {
+                                    onSurrender(issuance._id);
+                                  }}
                                 >
-                                  <ArrowUpRight className="h-4 w-4" />
+                                  <ArrowUpRight className="mr-2 h-4 w-4" />
+                                  Surrender
                                 </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p>Surrender item</p>
-                              </TooltipContent>
-                            </Tooltip>
-
-                            <AlertDialog>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
+                                <AlertDialog>
                                   <AlertDialogTrigger asChild>
                                     <Button
-                                      variant="outline"
+                                      variant="ghost"
                                       size="sm"
-                                      className="text-destructive"
+                                      className="justify-start text-destructive"
                                     >
-                                      <Trash className="h-4 w-4" />
+                                      <Trash className="mr-2 h-4 w-4" /> Delete
                                     </Button>
                                   </AlertDialogTrigger>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  <p>Delete issuance</p>
-                                </TooltipContent>
-                              </Tooltip>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>Delete Issuance</AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    Are you sure you want to delete this issuance? This will mark the issuance as deleted and set the item status back to active.
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                  <AlertDialogAction
-                                    onClick={() => onDelete(issuance._id)}
-                                  >
-                                    Delete
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
-                          </>
-                        )}
-                      </div>
-                    </TooltipProvider>
+                                  <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                      <AlertDialogTitle>Delete Issuance</AlertDialogTitle>
+                                      <AlertDialogDescription>
+                                        Are you sure you want to delete this issuance? This will mark the issuance as deleted and set the item status back to active.
+                                      </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                      <AlertDialogAction
+                                        onClick={() => {
+                                          onDelete(issuance._id);
+                                        }}
+                                      >
+                                        Delete
+                                      </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                  </AlertDialogContent>
+                                </AlertDialog>
+                              </>
+                            )}
+                          </div>
+                        </PopoverContent>
+                      </Popover>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))

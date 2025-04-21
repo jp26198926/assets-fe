@@ -9,7 +9,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Edit2, Trash2, Eye } from "lucide-react";
+import { Edit2, Trash2, Eye, MoreHorizontal } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import TablePagination from "@/components/TablePagination";
 import {
@@ -23,6 +23,11 @@ import { Input } from "@/components/ui/input";
 import { useItemTypesApi } from '@/hooks/useItemTypesApi';
 import { ItemType } from '@/hooks/useItemTypesApi';
 import ItemTypeDetailsDialog from '@/components/itemTypes/ItemTypeDetailsDialog';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 
 interface ItemTypesListProps {
   itemTypes: any[];
@@ -52,6 +57,8 @@ const ItemTypesList: React.FC<ItemTypesListProps> = ({
   const [endIndex, setEndIndex] = useState(0);
   const [paginatedItems, setPaginatedItems] = useState<any[]>([]);
   const { checkBulkItemTypeUsage } = useItemTypesApi();
+
+  const [openPopoverId, setOpenPopoverId] = useState<string | null>(null);
 
   useEffect(() => {
     const checkItemTypesUsage = async () => {
@@ -99,9 +106,90 @@ const ItemTypesList: React.FC<ItemTypesListProps> = ({
     }
   };
 
+  // --- MOBILE CARD DESIGN ---
+  const mobileCard = (itemType: any) => (
+    <div key={itemType._id} className="bg-white rounded-md p-4 shadow flex flex-col gap-2 border mb-3">
+      <div className="flex items-center justify-between">
+        <span className="font-semibold text-base">{itemType.type}</span>
+        <Popover open={openPopoverId === itemType._id} onOpenChange={open => setOpenPopoverId(open ? itemType._id : null)}>
+          <PopoverTrigger asChild>
+            <Button size="icon" variant="outline" aria-label="Actions">
+              <MoreHorizontal className="h-4 w-4" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent side="left" align="start" className="p-0 w-36">
+            <div className="flex flex-col">
+              <Button
+                variant="ghost"
+                className="justify-start"
+                size="sm"
+                onClick={() => {
+                  setSelectedItemType(itemType);
+                  setShowDetailsDialog(true);
+                  setOpenPopoverId(null);
+                }}
+              >
+                <Eye className="mr-2 h-4 w-4" /> View
+              </Button>
+              <Button
+                variant="ghost"
+                className="justify-start"
+                size="sm"
+                onClick={() => {
+                  handleEdit(itemType._id, itemType.type);
+                  setOpenPopoverId(null);
+                }}
+              >
+                <Edit2 className="mr-2 h-4 w-4" /> Edit
+              </Button>
+              <Button
+                variant="ghost"
+                className="justify-start text-destructive"
+                size="sm"
+                onClick={() => {
+                  onDelete(itemType._id);
+                  setOpenPopoverId(null);
+                }}
+                disabled={itemTypeInUse(itemType._id)}
+              >
+                <Trash2 className="mr-2 h-4 w-4" /> Delete
+              </Button>
+            </div>
+          </PopoverContent>
+        </Popover>
+      </div>
+    </div>
+  );
+
   return (
     <div>
-      <div className="rounded-md border">
+      {/* MOBILE CARD VIEW */}
+      <div className="block md:hidden">
+        {isLoading
+          ? Array.from({ length: 3 }).map((_, idx) => (
+              <div key={`mobile-skel-${idx}`} className="p-4 bg-white rounded-md shadow border mb-3 space-y-2">
+                <Skeleton className="h-5 w-40" />
+              </div>
+            ))
+          : paginatedItems.length > 0
+            ? paginatedItems.map(mobileCard)
+            : (
+                <div className="text-center py-12 text-gray-500">
+                  No item types found.
+                </div>
+              )
+        }
+        <TablePagination
+          currentPage={currentPage}
+          totalItems={itemTypes.length}
+          pageSize={pageSize}
+          onPageChange={setCurrentPage}
+          onPageSizeChange={setPageSize}
+        />
+      </div>
+
+      {/* DESKTOP TABLE VIEW */}
+      <div className="hidden md:block rounded-md border">
         <Table>
           <TableHeader>
             <TableRow>
@@ -165,15 +253,14 @@ const ItemTypesList: React.FC<ItemTypesListProps> = ({
             )}
           </TableBody>
         </Table>
+        <TablePagination
+          currentPage={currentPage}
+          totalItems={itemTypes.length}
+          pageSize={pageSize}
+          onPageChange={setCurrentPage}
+          onPageSizeChange={setPageSize}
+        />
       </div>
-
-      <TablePagination
-        currentPage={currentPage}
-        totalItems={itemTypes.length}
-        pageSize={pageSize}
-        onPageChange={setCurrentPage}
-        onPageSizeChange={setPageSize}
-      />
 
       <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
         <DialogContent>
@@ -208,3 +295,4 @@ const ItemTypesList: React.FC<ItemTypesListProps> = ({
 };
 
 export default ItemTypesList;
+
