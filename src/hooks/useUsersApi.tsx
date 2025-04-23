@@ -1,3 +1,4 @@
+
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { toast } from '@/hooks/use-toast';
@@ -47,7 +48,8 @@ export const useUsersApi = () => {
     lastname: string;
     role: 'Admin' | 'User';
   }) => {
-    const response = await api.post('/api/users', userData);
+    // Update the endpoint from '/api/users' to '/api/users/register' to match the server endpoint
+    const response = await api.post('/api/users/register', userData);
     return response.data;
   };
 

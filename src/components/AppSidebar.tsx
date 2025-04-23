@@ -44,6 +44,7 @@ const AppSidebar = () => {
     { title: "Areas", path: "/areas", icon: LayoutGrid },
     { title: "Issuances", path: "/issuance", icon: ArrowRightLeft },
     { title: "Repairs", path: "/repairs", icon: Wrench },
+    // Only show "Users" and "Trails" for Admins
     ...(user?.role === 'Admin' ? [
       { title: "Users", path: "/users", icon: Users },
       { title: "Trails", path: "/trails", icon: Route }

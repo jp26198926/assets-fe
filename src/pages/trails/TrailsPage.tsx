@@ -28,6 +28,11 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger
+} from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { 
@@ -36,7 +41,8 @@ import {
   FileOutput, 
   Loader2, 
   History,
-  Eye
+  Eye,
+  MoreVertical
 } from "lucide-react";
 import { useTrailsApi, TrailFilter, Trail } from '@/hooks/useTrailsApi';
 import { useUsersApi } from '@/hooks/useUsersApi';
@@ -50,6 +56,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import TrailDetailsDialog from '@/components/trails/TrailDetailsDialog';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 const TrailsPage = () => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -62,7 +69,9 @@ const TrailsPage = () => {
 
   const [selectedTrail, setSelectedTrail] = useState<Trail | null>(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
-  
+  const [openPopoverId, setOpenPopoverId] = useState<string | null>(null);
+  const isMobile = useIsMobile();
+
   const filteredTrails = trails.filter((trail: any) => {
     if (!searchQuery) return true;
     
@@ -127,6 +136,55 @@ const TrailsPage = () => {
 
     exportToPdf(formattedData, columns, 'Audit Trails', 'Audit_Trails');
   };
+
+  const TrailCard = ({ trail }: { trail: Trail }) => (
+    <div key={trail._id} className="bg-white rounded-md p-4 shadow flex flex-col gap-2 border mb-3">
+      <div className="flex justify-between items-center">
+        <span className="text-xs font-medium text-neutral-600">
+          {format(new Date(trail.timestamp), 'yyyy-MM-dd HH:mm:ss')}
+        </span>
+        <span className="text-sm font-medium">
+          {trail.action}
+        </span>
+      </div>
+      <div className="font-medium">{trail.entity}</div>
+      <div className="text-sm text-neutral-600">
+        {trail.userId ? `${trail.userId.firstname} ${trail.userId.lastname}` : 'System'}
+      </div>
+      <div className="text-xs truncate text-neutral-500" title={trail.details}>
+        {trail.details}
+      </div>
+      <div className="text-xs text-neutral-400">IP: {trail.ip}</div>
+      <div className="flex justify-end">
+        <Popover
+          open={openPopoverId === trail._id}
+          onOpenChange={(open) => setOpenPopoverId(open ? trail._id : null)}
+        >
+          <PopoverTrigger asChild>
+            <Button variant="outline" size="icon">
+              <MoreVertical className="h-4 w-4" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent side="left" align="start" className="w-40 p-0">
+            <div className="flex flex-col">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setOpenPopoverId(null);
+                  setSelectedTrail(trail);
+                  setIsDetailsOpen(true);
+                }}
+                className="justify-start"
+              >
+                View details
+              </Button>
+            </div>
+          </PopoverContent>
+        </Popover>
+      </div>
+    </div>
+  );
 
   return (
     <div className="container mx-auto py-6">
@@ -283,70 +341,86 @@ const TrailsPage = () => {
               <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Timestamp</TableHead>
-                    <TableHead>User</TableHead>
-                    <TableHead>Action</TableHead>
-                    <TableHead>Entity</TableHead>
-                    <TableHead>Details</TableHead>
-                    <TableHead>IP</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
+            <>
+              {isMobile ? (
+                <div className="space-y-2">
                   {filteredTrails.length > 0 ? (
-                    filteredTrails.map((trail: any) => (
-                      <TableRow key={trail._id}>
-                        <TableCell>
-                          {format(new Date(trail.timestamp), 'yyyy-MM-dd HH:mm:ss')}
-                        </TableCell>
-                        <TableCell>
-                          {trail.userId ? `${trail.userId.firstname} ${trail.userId.lastname}` : 'System'}
-                        </TableCell>
-                        <TableCell>{trail.action}</TableCell>
-                        <TableCell>{trail.entity}</TableCell>
-                        <TableCell className="max-w-[300px] truncate">
-                          {trail.details}
-                        </TableCell>
-                        <TableCell>{trail.ip}</TableCell>
-                        <TableCell>
-                          <TooltipProvider>
-                            <div className="flex items-center gap-2">
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => {
-                                      setSelectedTrail(trail);
-                                      setIsDetailsOpen(true);
-                                    }}
-                                  >
-                                    <Eye className="h-4 w-4" />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  <p>View details</p>
-                                </TooltipContent>
-                              </Tooltip>
-                            </div>
-                          </TooltipProvider>
-                        </TableCell>
-                      </TableRow>
+                    filteredTrails.map((trail: Trail) => (
+                      <TrailCard key={trail._id} trail={trail} />
                     ))
                   ) : (
-                    <TableRow>
-                      <TableCell colSpan={7} className="text-center py-4">
-                        No audit trails found matching your criteria.
-                      </TableCell>
-                    </TableRow>
+                    <div className="text-center py-4 text-gray-500">
+                      No audit trails found matching your criteria.
+                    </div>
                   )}
-                </TableBody>
-              </Table>
-            </div>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Timestamp</TableHead>
+                        <TableHead>User</TableHead>
+                        <TableHead>Action</TableHead>
+                        <TableHead>Entity</TableHead>
+                        <TableHead>Details</TableHead>
+                        <TableHead>IP</TableHead>
+                        <TableHead>Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredTrails.length > 0 ? (
+                        filteredTrails.map((trail: any) => (
+                          <TableRow key={trail._id}>
+                            <TableCell>
+                              {format(new Date(trail.timestamp), 'yyyy-MM-dd HH:mm:ss')}
+                            </TableCell>
+                            <TableCell>
+                              {trail.userId ? `${trail.userId.firstname} ${trail.userId.lastname}` : 'System'}
+                            </TableCell>
+                            <TableCell>{trail.action}</TableCell>
+                            <TableCell>{trail.entity}</TableCell>
+                            <TableCell className="max-w-[300px] truncate">
+                              {trail.details}
+                            </TableCell>
+                            <TableCell>{trail.ip}</TableCell>
+                            <TableCell>
+                              <TooltipProvider>
+                                <div className="flex items-center gap-2">
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => {
+                                          setSelectedTrail(trail);
+                                          setIsDetailsOpen(true);
+                                        }}
+                                      >
+                                        <Eye className="h-4 w-4" />
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                      <p>View details</p>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </div>
+                              </TooltipProvider>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      ) : (
+                        <TableRow>
+                          <TableCell colSpan={7} className="text-center py-4">
+                            No audit trails found matching your criteria.
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </>
           )}
         </CardContent>
       </Card>

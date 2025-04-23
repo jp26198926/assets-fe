@@ -21,8 +21,8 @@ const SettingsPage = () => {
         {/* API Configuration is available to all users, even without login */}
         <ApiConfiguration />
         
-        {/* App Settings requires user authentication */}
-        {user && (
+        {/* App Settings only visible to Admins */}
+        {user && user.role === 'Admin' && (
           <>
             <Separator className="my-8" />
             <AppSettings />

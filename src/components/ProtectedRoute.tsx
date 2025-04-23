@@ -16,6 +16,9 @@ const ProtectedRoute = ({ children, requiredRole }: ProtectedRouteProps) => {
   // Special case for settings page - allow access without authentication
   const isSettingsPage = location.pathname === '/settings';
 
+  // Protect /users route for Admins only
+  const isUsersPage = location.pathname === '/users';
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -31,6 +34,11 @@ const ProtectedRoute = ({ children, requiredRole }: ProtectedRouteProps) => {
   // Allow access to settings page without authentication
   if (isSettingsPage) {
     return <>{children}</>;
+  }
+  
+  // Restrict access to /users for non-Admins
+  if (isUsersPage && (!user || user.role !== 'Admin')) {
+    return <Navigate to="/dashboard" replace />;
   }
 
   if (!user) {

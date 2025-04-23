@@ -1,4 +1,3 @@
-
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { toast } from '@/hooks/use-toast';
@@ -51,6 +50,11 @@ export const useItemsApi = () => {
 
   const fetchItemHistory = async (id: string) => {
     const response = await api.get(`/api/items/${id}/history`);
+    return response.data;
+  };
+
+  const fetchItemByBarcode = async (barcodeId: string) => {
+    const response = await api.get(`/api/items/barcode/${barcodeId}`);
     return response.data;
   };
 
@@ -128,12 +132,15 @@ export const useItemsApi = () => {
       }
     });
 
+  const getItemByBarcode = fetchItemByBarcode;
+
   return {
     useItems,
     useItem,
     useItemHistory,
     useCreateItem,
     useUpdateItem,
-    useDeleteItem
+    useDeleteItem,
+    getItemByBarcode
   };
 };

@@ -1,3 +1,4 @@
+
 import React, { useEffect } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import {
@@ -11,15 +12,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Loader2, Plus } from "lucide-react";
+import { Loader2, Plus, Barcode } from "lucide-react";
 import { useAuth } from '@/hooks/useAuth';
+import BarcodeSearch from '@/components/items/BarcodeSearch';
 
 type RepairFormValues = {
   date: string;
@@ -42,11 +37,10 @@ const NewRepairDialog: React.FC<NewRepairDialogProps> = ({
   isCreating,
   items
 }) => {
-  const { register, handleSubmit, control, reset, formState: { errors } } = useForm<RepairFormValues>();
+  const { register, handleSubmit, setValue, reset, formState: { errors } } = useForm<RepairFormValues>();
   const { user } = useAuth();
 
   const handleCreate = (data: RepairFormValues) => {
-    // Make sure to include the current user ID as reportBy
     const completeData = {
       ...data,
       reportBy: user?.id
@@ -55,24 +49,22 @@ const NewRepairDialog: React.FC<NewRepairDialogProps> = ({
     onSubmit(completeData);
     reset();
   };
+
+  const handleItemFound = (item: any) => {
+    setValue('itemId', item._id);
+  };
   
-  // Cleanup function to ensure body styles are reset
   const handleDialogClose = () => {
-    // Reset any body styles that might be preventing interaction
     document.body.style.pointerEvents = '';
     document.body.style.overflow = '';
-    
-    // Call the parent's onOpenChange
     onOpenChange(false);
   };
 
-  // Reset form when dialog opens or closes
   useEffect(() => {
     if (!open) {
       reset();
     }
     
-    // Cleanup function when component unmounts
     return () => {
       document.body.style.pointerEvents = '';
       document.body.style.overflow = '';
@@ -111,30 +103,13 @@ const NewRepairDialog: React.FC<NewRepairDialogProps> = ({
           
           <div className="space-y-2">
             <label htmlFor="itemId" className="text-sm font-medium">
-              Item
+              Item Barcode
             </label>
-            <Controller
-              name="itemId"
-              control={control}
-              rules={{ required: "Item is required" }}
-              render={({ field }) => (
-                <Select 
-                  onValueChange={field.onChange} 
-                  defaultValue={field.value}
-                >
-                  <SelectTrigger className={errors.itemId ? "border-red-500" : ""}>
-                    <SelectValue placeholder="Select an item" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {items.map((item: any) => (
-                      <SelectItem key={item._id} value={item._id}>
-                        {item.barcodeId ? `${item.barcodeId} - ${item.itemName}` : item.itemName}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
+            <Input
+              type="hidden"
+              {...register("itemId", { required: "Item is required" })}
             />
+            <BarcodeSearch onItemFound={handleItemFound} />
             {errors.itemId && (
               <p className="text-red-500 text-sm">{errors.itemId.message}</p>
             )}
