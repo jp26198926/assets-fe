@@ -1,6 +1,5 @@
-
 import React, { useRef, useEffect, useState } from 'react';
-import { Loader2, ScanBarcode, Camera, SwitchCamera } from 'lucide-react';
+import { Loader2, ScanBarcode, Camera, SwitchCamera, Barcode } from 'lucide-react';
 import { BrowserMultiFormatReader, DecodeHintType, BarcodeFormat } from '@zxing/library';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
@@ -21,19 +20,17 @@ const CameraPreview: React.FC<CameraPreviewProps> = ({ onClose, onBarcodeDetecte
   const [selectedCamera, setSelectedCamera] = useState<string>('');
   const isMobile = useIsMobile();
   
-  // Scan interval for better detection
   const [scanInterval, setScanInterval] = useState<number | null>(null);
-  
-  // This function will fetch and set available cameras
+  const [selectedFormat, setSelectedFormat] = useState<BarcodeFormat>(BarcodeFormat.CODE_128);
+  const [scanAttempts, setScanAttempts] = useState(0);
+
   const fetchCameras = async () => {
     try {
       setIsLoading(true);
       setError('');
       
-      // Request camera permission first
       await navigator.mediaDevices.getUserMedia({ video: true })
         .then(stream => {
-          // Stop the temporary stream
           stream.getTracks().forEach(track => track.stop());
         })
         .catch(err => {
@@ -51,7 +48,6 @@ const CameraPreview: React.FC<CameraPreviewProps> = ({ onClose, onBarcodeDetecte
       
       setCameras(videoDevices);
       
-      // Select the back camera by default if available, otherwise select the first camera
       const backCamera = videoDevices.find(device => 
         device.label.toLowerCase().includes('back') || 
         device.label.toLowerCase().includes('environment')
@@ -71,19 +67,19 @@ const CameraPreview: React.FC<CameraPreviewProps> = ({ onClose, onBarcodeDetecte
     }
   };
 
-  // Function to manually scan for barcodes from current video frame
   const scanVideoForBarcode = () => {
     if (!readerRef.current || !videoRef.current || !isScanning) return;
     
     try {
+      setScanAttempts(prev => prev + 1);
+      
       readerRef.current.decodeFromVideoElement(videoRef.current)
         .then(result => {
           if (result) {
-            console.log('Barcode detected:', result.getText());
+            console.log('Barcode detected:', result.getText(), 'Format:', result.getBarcodeFormat());
             onBarcodeDetected(result.getText());
             setIsScanning(false);
             
-            // Clear the scan interval if it exists
             if (scanInterval) {
               clearInterval(scanInterval);
               setScanInterval(null);
@@ -91,7 +87,6 @@ const CameraPreview: React.FC<CameraPreviewProps> = ({ onClose, onBarcodeDetecte
           }
         })
         .catch(error => {
-          // Only log important errors, not normal "no barcode found" errors
           if (!(error.name === "NotFoundException" || error.name === "ChecksumException")) {
             console.error('Scanning error:', error);
           }
@@ -101,40 +96,66 @@ const CameraPreview: React.FC<CameraPreviewProps> = ({ onClose, onBarcodeDetecte
     }
   };
 
-  // Start the barcode scanner with the selected camera
+  const createReader = (format: BarcodeFormat) => {
+    const hints = new Map();
+    
+    if (format === BarcodeFormat.CODE_128) {
+      hints.set(DecodeHintType.POSSIBLE_FORMATS, [BarcodeFormat.CODE_128]);
+      console.log("Creating specialized CODE_128 scanner");
+    } else {
+      const formats = [
+        BarcodeFormat.QR_CODE,
+        BarcodeFormat.EAN_13,
+        BarcodeFormat.CODE_128,
+        BarcodeFormat.CODE_39,
+        BarcodeFormat.UPC_A,
+        BarcodeFormat.UPC_E,
+        BarcodeFormat.EAN_8,
+        BarcodeFormat.DATA_MATRIX,
+        BarcodeFormat.AZTEC,
+        BarcodeFormat.PDF_417,
+        BarcodeFormat.CODABAR,
+        BarcodeFormat.ITF,
+      ];
+      hints.set(DecodeHintType.POSSIBLE_FORMATS, formats);
+    }
+    
+    hints.set(DecodeHintType.TRY_HARDER, true);
+    hints.set(DecodeHintType.PURE_BARCODE, false);
+    hints.set(DecodeHintType.ASSUME_CODE_39_CHECK_DIGIT, false);
+    
+    return new BrowserMultiFormatReader(hints);
+  };
+
   const startScanner = async () => {
-    if (!readerRef.current || !videoRef.current || !selectedCamera) return;
+    if (!videoRef.current || !selectedCamera) return;
     
     try {
       setIsLoading(true);
       setIsScanning(true);
       setError('');
+      setScanAttempts(0);
       
-      // Reset previous scanner if active
-      readerRef.current.reset();
+      readerRef.current = createReader(selectedFormat);
       
-      // If there's a previous scan interval, clear it
+      if (readerRef.current) {
+        readerRef.current.reset();
+      }
+      
       if (scanInterval) {
         clearInterval(scanInterval);
         setScanInterval(null);
       }
       
-      // Configure constraints specifically for mobile
       const constraints: MediaTrackConstraints = {
-        deviceId: { exact: selectedCamera }
+        deviceId: { exact: selectedCamera },
+        width: { ideal: 1280 },
+        height: { ideal: 720 }
       };
       
-      // For mobile devices, explicitly set width/height and other parameters
-      if (isMobile) {
-        constraints.width = { ideal: 1280 };
-        constraints.height = { ideal: 720 };
-        constraints.facingMode = 'environment'; // Prefer back camera on mobile
-        
-        // Remove the incorrect focusMode property
-        // We'll let the device handle focusing automatically
-      }
+      // Remove the problematic 'zoom' property that's causing the TypeScript error
+      // Instead, we'll let the device handle focus and zoom automatically
       
-      // Start video stream without the continuous detection
       const stream = await navigator.mediaDevices.getUserMedia({ 
         video: constraints,
         audio: false
@@ -148,8 +169,8 @@ const CameraPreview: React.FC<CameraPreviewProps> = ({ onClose, onBarcodeDetecte
         });
       }
       
-      // Set up manual scanning at regular intervals (better for performance)
-      const intervalId = window.setInterval(scanVideoForBarcode, 500);
+      const intervalTime = selectedFormat === BarcodeFormat.CODE_128 ? 100 : 200;
+      const intervalId = window.setInterval(scanVideoForBarcode, intervalTime);
       setScanInterval(intervalId);
       
       setIsLoading(false);
@@ -161,39 +182,31 @@ const CameraPreview: React.FC<CameraPreviewProps> = ({ onClose, onBarcodeDetecte
     }
   };
 
-  // Handle camera selection change
   const handleCameraChange = (cameraId: string) => {
     setSelectedCamera(cameraId);
   };
 
-  useEffect(() => {
-    // Configure barcode reader hints for better performance
-    const hints = new Map();
-    const formats = [
-      BarcodeFormat.QR_CODE,
-      BarcodeFormat.EAN_13,
-      BarcodeFormat.CODE_128,
-      BarcodeFormat.CODE_39,
-      BarcodeFormat.UPC_A,
-      BarcodeFormat.UPC_E,
-      BarcodeFormat.EAN_8,
-      // Add more formats if needed
-      BarcodeFormat.DATA_MATRIX,
-      BarcodeFormat.AZTEC,
-      BarcodeFormat.PDF_417
-    ];
-    
-    hints.set(DecodeHintType.POSSIBLE_FORMATS, formats);
-    hints.set(DecodeHintType.TRY_HARDER, true);
-    
-    // Create reader instance with improved settings
-    const codeReader = new BrowserMultiFormatReader(hints);
-    readerRef.current = codeReader;
+  const handleFormatChange = (format: string) => {
+    console.log(`Switching to format: ${format}`);
+    setSelectedFormat(parseInt(format, 10));
+    if (selectedCamera) {
+      setTimeout(() => startScanner(), 100);
+    }
+  };
 
-    // Fetch available cameras
+  const handleManualScan = () => {
+    if (isScanning && videoRef.current && readerRef.current) {
+      console.log("Manually triggering barcode scan");
+      scanVideoForBarcode();
+    }
+  };
+
+  useEffect(() => {
+    const defaultReader = createReader(selectedFormat);
+    readerRef.current = defaultReader;
+
     fetchCameras();
 
-    // Cleanup function to release camera when component unmounts
     return () => {
       if (readerRef.current) {
         try {
@@ -203,12 +216,10 @@ const CameraPreview: React.FC<CameraPreviewProps> = ({ onClose, onBarcodeDetecte
         }
       }
       
-      // Clear scan interval if it exists
       if (scanInterval) {
         clearInterval(scanInterval);
       }
       
-      // Ensure video stream is stopped
       if (videoRef.current && videoRef.current.srcObject) {
         const stream = videoRef.current.srcObject as MediaStream;
         stream.getTracks().forEach(track => track.stop());
@@ -216,7 +227,6 @@ const CameraPreview: React.FC<CameraPreviewProps> = ({ onClose, onBarcodeDetecte
     };
   }, []);
 
-  // Start scanner whenever selected camera changes
   useEffect(() => {
     if (selectedCamera && readerRef.current) {
       startScanner();
@@ -249,7 +259,7 @@ const CameraPreview: React.FC<CameraPreviewProps> = ({ onClose, onBarcodeDetecte
           playsInline
           autoPlay
           muted
-          style={{ transform: 'scaleX(1)' }} /* Fix mirrored video on some phones */
+          style={{ transform: 'scaleX(1)' }}
         />
         
         {isScanning && !isLoading && (
@@ -258,42 +268,71 @@ const CameraPreview: React.FC<CameraPreviewProps> = ({ onClose, onBarcodeDetecte
               <ScanBarcode className="h-6 w-6 text-white animate-pulse" />
             </div>
             <p className="text-white text-sm bg-black/40 px-2 py-1 rounded">
-              Scanning for barcode...
+              Scanning for barcode... {scanAttempts > 0 && `(${scanAttempts})`}
             </p>
           </div>
         )}
       </div>
 
-      {cameras.length > 0 && (
-        <div className="mt-4 flex items-center gap-2">
+      <div className="mt-4 space-y-2">
+        <div className="flex items-center gap-2">
           <Select
-            value={selectedCamera}
-            onValueChange={handleCameraChange}
+            value={selectedFormat.toString()}
+            onValueChange={handleFormatChange}
             disabled={isLoading}
           >
             <SelectTrigger className="w-full">
-              <SelectValue placeholder="Select camera" />
+              <SelectValue placeholder="Select barcode format" />
             </SelectTrigger>
             <SelectContent>
-              {cameras.map((camera) => (
-                <SelectItem key={camera.deviceId} value={camera.deviceId}>
-                  {camera.label}
-                </SelectItem>
-              ))}
+              <SelectItem value={BarcodeFormat.CODE_128.toString()}>CODE 128 (Default)</SelectItem>
+              <SelectItem value={BarcodeFormat.QR_CODE.toString()}>QR Code</SelectItem>
+              <SelectItem value={BarcodeFormat.EAN_13.toString()}>EAN-13</SelectItem>
+              <SelectItem value={BarcodeFormat.DATA_MATRIX.toString()}>Data Matrix</SelectItem>
             </SelectContent>
           </Select>
-
-          <Button 
-            variant="outline" 
-            size="icon"
-            onClick={fetchCameras}
-            disabled={isLoading}
-            title="Refresh camera list"
-          >
-            <SwitchCamera className="h-4 w-4" />
-          </Button>
         </div>
-      )}
+        
+        {cameras.length > 0 && (
+          <div className="flex items-center gap-2">
+            <Select
+              value={selectedCamera}
+              onValueChange={handleCameraChange}
+              disabled={isLoading}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select camera" />
+              </SelectTrigger>
+              <SelectContent>
+                {cameras.map((camera) => (
+                  <SelectItem key={camera.deviceId} value={camera.deviceId}>
+                    {camera.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Button 
+              variant="outline" 
+              size="icon"
+              onClick={fetchCameras}
+              disabled={isLoading}
+              title="Refresh camera list"
+            >
+              <SwitchCamera className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
+        
+        <Button 
+          className="w-full" 
+          onClick={handleManualScan} 
+          disabled={!isScanning || isLoading}
+        >
+          <Barcode className="h-4 w-4 mr-2" />
+          Trigger Scan
+        </Button>
+      </div>
     </div>
   );
 };
