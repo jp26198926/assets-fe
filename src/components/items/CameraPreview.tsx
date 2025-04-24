@@ -20,7 +20,10 @@ const CameraPreview: React.FC<CameraPreviewProps> = ({ onClose, onBarcodeDetecte
   const [cameras, setCameras] = useState<Array<{ deviceId: string, label: string }>>([]);
   const [selectedCamera, setSelectedCamera] = useState<string>('');
   const isMobile = useIsMobile();
-
+  
+  // Scan interval for better detection
+  const [scanInterval, setScanInterval] = useState<number | null>(null);
+  
   // This function will fetch and set available cameras
   const fetchCameras = async () => {
     try {
@@ -68,6 +71,36 @@ const CameraPreview: React.FC<CameraPreviewProps> = ({ onClose, onBarcodeDetecte
     }
   };
 
+  // Function to manually scan for barcodes from current video frame
+  const scanVideoForBarcode = () => {
+    if (!readerRef.current || !videoRef.current || !isScanning) return;
+    
+    try {
+      readerRef.current.decodeFromVideoElement(videoRef.current)
+        .then(result => {
+          if (result) {
+            console.log('Barcode detected:', result.getText());
+            onBarcodeDetected(result.getText());
+            setIsScanning(false);
+            
+            // Clear the scan interval if it exists
+            if (scanInterval) {
+              clearInterval(scanInterval);
+              setScanInterval(null);
+            }
+          }
+        })
+        .catch(error => {
+          // Only log important errors, not normal "no barcode found" errors
+          if (!(error.name === "NotFoundException" || error.name === "ChecksumException")) {
+            console.error('Scanning error:', error);
+          }
+        });
+    } catch (err) {
+      console.error('Error during manual scan:', err);
+    }
+  };
+
   // Start the barcode scanner with the selected camera
   const startScanner = async () => {
     if (!readerRef.current || !videoRef.current || !selectedCamera) return;
@@ -80,6 +113,12 @@ const CameraPreview: React.FC<CameraPreviewProps> = ({ onClose, onBarcodeDetecte
       // Reset previous scanner if active
       readerRef.current.reset();
       
+      // If there's a previous scan interval, clear it
+      if (scanInterval) {
+        clearInterval(scanInterval);
+        setScanInterval(null);
+      }
+      
       // Configure constraints specifically for mobile
       const constraints: MediaTrackConstraints = {
         deviceId: { exact: selectedCamera }
@@ -90,32 +129,28 @@ const CameraPreview: React.FC<CameraPreviewProps> = ({ onClose, onBarcodeDetecte
         constraints.width = { ideal: 1280 };
         constraints.height = { ideal: 720 };
         constraints.facingMode = 'environment'; // Prefer back camera on mobile
+        
+        // Remove the incorrect focusMode property
+        // We'll let the device handle focusing automatically
       }
       
-      // Start decoding from the selected device with custom constraints
-      await readerRef.current.decodeFromVideoDevice(
-        selectedCamera,
-        videoRef.current,
-        (result, error) => {
-          if (result) {
-            console.log('Barcode detected:', result.getText());
-            onBarcodeDetected(result.getText());
-            setIsScanning(false);
-          }
-          if (error && !(error instanceof TypeError)) {
-            // Ignore TypeError as they are often just the absence of a barcode
-            console.error('Scanning error:', error);
-          }
-        }
-      );
+      // Start video stream without the continuous detection
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: constraints,
+        audio: false
+      });
       
-      // Ensure video is playing after setting up
       if (videoRef.current) {
-        videoRef.current.play().catch(err => {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play().catch(err => {
           console.error('Error playing video:', err);
           throw new Error('Failed to start video stream');
         });
       }
+      
+      // Set up manual scanning at regular intervals (better for performance)
+      const intervalId = window.setInterval(scanVideoForBarcode, 500);
+      setScanInterval(intervalId);
       
       setIsLoading(false);
     } catch (err) {
@@ -142,12 +177,16 @@ const CameraPreview: React.FC<CameraPreviewProps> = ({ onClose, onBarcodeDetecte
       BarcodeFormat.UPC_A,
       BarcodeFormat.UPC_E,
       BarcodeFormat.EAN_8,
+      // Add more formats if needed
+      BarcodeFormat.DATA_MATRIX,
+      BarcodeFormat.AZTEC,
+      BarcodeFormat.PDF_417
     ];
     
     hints.set(DecodeHintType.POSSIBLE_FORMATS, formats);
     hints.set(DecodeHintType.TRY_HARDER, true);
     
-    // Create reader instance
+    // Create reader instance with improved settings
     const codeReader = new BrowserMultiFormatReader(hints);
     readerRef.current = codeReader;
 
@@ -162,6 +201,17 @@ const CameraPreview: React.FC<CameraPreviewProps> = ({ onClose, onBarcodeDetecte
         } catch (e) {
           console.error('Error resetting camera:', e);
         }
+      }
+      
+      // Clear scan interval if it exists
+      if (scanInterval) {
+        clearInterval(scanInterval);
+      }
+      
+      // Ensure video stream is stopped
+      if (videoRef.current && videoRef.current.srcObject) {
+        const stream = videoRef.current.srcObject as MediaStream;
+        stream.getTracks().forEach(track => track.stop());
       }
     };
   }, []);
