@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { Camera, Upload, X, CameraOff } from 'lucide-react';
@@ -18,7 +17,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Loader2, Plus, Pencil } from "lucide-react";
 import { toast } from '@/hooks/use-toast';
-import CameraPreview from './CameraPreview';
 
 interface ItemFormProps {
   open: boolean;
@@ -40,11 +38,13 @@ const ItemForm: React.FC<ItemFormProps> = ({
   isLoadingTypes
 }) => {
   const [photoPreview, setPhotoPreview] = useState<string | null>(editingItem?.photo || null);
-  const [showBarcodeScanner, setShowBarcodeScanner] = useState(false);
   const [showCameraPreview, setShowCameraPreview] = useState(false);
+  const [stream, setStream] = useState<MediaStream | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [isCameraLoading, setIsCameraLoading] = useState(false);
+  const [facingMode, setFacingMode] = useState<string>("environment"); // Default to back camera
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
   const isMobile = useIsMobile();
   
   const { register, handleSubmit, reset, setValue, formState: { errors }, control } = useForm({
@@ -82,14 +82,125 @@ const ItemForm: React.FC<ItemFormProps> = ({
 
   useEffect(() => {
     if (!open) {
-      setShowCameraPreview(false);
+      stopCameraStream();
     }
+    
+    return () => {
+      stopCameraStream();
+    };
   }, [open]);
 
-  const handleCapture = (photoDataUrl: string) => {
-    setPhotoPreview(photoDataUrl);
-    setValue('photo', photoDataUrl);
+  const stopCameraStream = () => {
+    if (stream) {
+      stream.getTracks().forEach(track => track.stop());
+      setStream(null);
+    }
     setShowCameraPreview(false);
+    setCameraError(null);
+  };
+
+  const toggleCamera = () => {
+    const newFacingMode = facingMode === "environment" ? "user" : "environment";
+    setFacingMode(newFacingMode);
+    
+    if (showCameraPreview) {
+      stopCameraStream();
+      setTimeout(() => startCameraPreview(newFacingMode), 300);
+    }
+  };
+
+  const startCameraPreview = async (requestedFacingMode: string = facingMode) => {
+    stopCameraStream();
+    setCameraError(null);
+    setIsCameraLoading(true);
+    setShowCameraPreview(true);
+    
+    try {
+      console.log('Starting camera with facing mode:', requestedFacingMode);
+      
+      setFacingMode(requestedFacingMode);
+      
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error('Browser does not support camera access');
+      }
+
+      try {
+        const exactConstraints: MediaStreamConstraints = {
+          video: {
+            facingMode: { exact: requestedFacingMode }
+          }
+        };
+        
+        const mediaStream = await navigator.mediaDevices.getUserMedia(exactConstraints);
+        setStream(mediaStream);
+        
+        if (videoRef.current) {
+          videoRef.current.srcObject = mediaStream;
+          await videoRef.current.play();
+        }
+      } catch (exactError) {
+        console.log('Exact constraints failed, trying ideal constraints');
+        
+        const idealConstraints: MediaStreamConstraints = {
+          video: {
+            facingMode: requestedFacingMode
+          }
+        };
+        
+        const mediaStream = await navigator.mediaDevices.getUserMedia(idealConstraints);
+        setStream(mediaStream);
+        
+        if (videoRef.current) {
+          videoRef.current.srcObject = mediaStream;
+          await videoRef.current.play();
+        }
+      }
+    } catch (error) {
+      console.error('Error accessing camera:', error);
+      setShowCameraPreview(false);
+      setCameraError(error instanceof Error ? error.message : 'Failed to access camera');
+      toast({
+        title: 'Camera Error',
+        description: error instanceof Error ? error.message : 'Failed to access camera',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsCameraLoading(false);
+    }
+  };
+
+  const handleCapture = () => {
+    if (!videoRef.current) return;
+    
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = videoRef.current.videoWidth;
+      canvas.height = videoRef.current.videoHeight;
+      const ctx = canvas.getContext('2d');
+      
+      if (!ctx) {
+        toast({
+          title: 'Error',
+          description: 'Could not capture photo',
+          variant: 'destructive'
+        });
+        return;
+      }
+      
+      ctx.drawImage(videoRef.current, 0, 0);
+      const photoDataUrl = canvas.toDataURL('image/jpeg', 0.8);
+      
+      setPhotoPreview(photoDataUrl);
+      setValue('photo', photoDataUrl);
+      stopCameraStream();
+    } catch (error) {
+      console.error('Error capturing photo:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to capture photo',
+        variant: 'destructive'
+      });
+    }
   };
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -139,21 +250,9 @@ const ItemForm: React.FC<ItemFormProps> = ({
     }
   };
 
-  const handleBarcodeDetected = (barcode: string) => {
-    setValue('serialNo', barcode);
-    toast({
-      title: 'Barcode Detected',
-      description: `Serial Number set to: ${barcode}`,
-    });
-    setShowBarcodeScanner(false);
-  };
-
   return (
     <Dialog open={open} onOpenChange={(isOpen) => {
-      if (!isOpen) {
-        setShowCameraPreview(false);
-        setShowBarcodeScanner(false);
-      }
+      if (!isOpen) stopCameraStream();
       onOpenChange(isOpen);
     }}>
       <DialogContent className="sm:max-w-[500px]">
@@ -168,34 +267,47 @@ const ItemForm: React.FC<ItemFormProps> = ({
             <label className="text-sm font-medium">Item Photo</label>
             <div className="flex flex-col items-center gap-4">
               {showCameraPreview ? (
-                <div className="w-full">
-                  <CameraPreview 
-                    onClose={() => setShowCameraPreview(false)}
-                    onBarcodeDetected={() => {}} // Not using barcode detection for photos
-                  />
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={() => setShowCameraPreview(false)}
-                    className="w-full mt-2"
-                  >
-                    Cancel
-                  </Button>
-                </div>
-              ) : showBarcodeScanner ? (
-                <div className="w-full">
-                  <CameraPreview
-                    onClose={() => setShowBarcodeScanner(false)}
-                    onBarcodeDetected={handleBarcodeDetected}
-                  />
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={() => setShowBarcodeScanner(false)}
-                    className="w-full mt-2"
-                  >
-                    Cancel
-                  </Button>
+                <div className="relative w-full">
+                  <div className="aspect-video bg-slate-900 rounded-lg overflow-hidden">
+                    <video
+                      ref={videoRef}
+                      autoPlay
+                      playsInline
+                      muted
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                  {isCameraLoading ? (
+                    <div className="absolute inset-0 flex items-center justify-center bg-slate-900/50">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
+                    </div>
+                  ) : (
+                    <div className="flex justify-center gap-2 mt-2">
+                      <Button
+                        type="button"
+                        onClick={handleCapture}
+                        variant="default"
+                      >
+                        <Camera className="mr-2 h-4 w-4" />
+                        Capture
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={toggleCamera}
+                      >
+                        <Camera className="mr-2 h-4 w-4" />
+                        Switch Camera
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        onClick={stopCameraStream}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  )}
                 </div>
               ) : photoPreview ? (
                 <div className="relative">
@@ -231,7 +343,7 @@ const ItemForm: React.FC<ItemFormProps> = ({
                       onClick={() => {
                         checkCameraAvailability().then(available => {
                           if (available) {
-                            setShowCameraPreview(true);
+                            startCameraPreview();
                           } else {
                             setCameraError("Camera access not available. Please check your browser permissions.");
                             toast({
@@ -341,31 +453,9 @@ const ItemForm: React.FC<ItemFormProps> = ({
           </div>
           
           <div className="space-y-2">
-            <div className="flex justify-between items-center">
-              <label htmlFor="serialNo" className="text-sm font-medium">
-                Serial Number
-              </label>
-              <Button 
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  checkCameraAvailability().then(available => {
-                    if (available) {
-                      setShowBarcodeScanner(true);
-                    } else {
-                      toast({
-                        title: 'Camera Error',
-                        description: 'Camera access not available. Please check your browser permissions.',
-                        variant: 'destructive'
-                      });
-                    }
-                  });
-                }}
-              >
-                <Camera className="h-3 w-3 mr-1" /> Scan Barcode
-              </Button>
-            </div>
+            <label htmlFor="serialNo" className="text-sm font-medium">
+              Serial Number
+            </label>
             <Input
               id="serialNo"
               placeholder="Enter serial number"
