@@ -1,3 +1,4 @@
+
 import React, { useRef, useEffect, useState } from 'react';
 import { Loader2, ScanBarcode, Camera, SwitchCamera, Barcode } from 'lucide-react';
 import { BrowserMultiFormatReader, DecodeHintType, BarcodeFormat } from '@zxing/library';
@@ -127,25 +128,39 @@ const CameraPreview: React.FC<CameraPreviewProps> = ({ onClose, onBarcodeDetecte
     return new BrowserMultiFormatReader(hints);
   };
 
+  const stopCameraStream = () => {
+    console.log("Stopping camera stream");
+    if (scanInterval) {
+      clearInterval(scanInterval);
+      setScanInterval(null);
+    }
+    
+    if (videoRef.current && videoRef.current.srcObject) {
+      const stream = videoRef.current.srcObject as MediaStream;
+      if (stream) {
+        stream.getTracks().forEach(track => {
+          track.stop();
+        });
+      }
+      videoRef.current.srcObject = null;
+    }
+    
+    setIsScanning(false);
+  };
+
   const startScanner = async () => {
     if (!videoRef.current || !selectedCamera) return;
     
     try {
+      // Stop any existing stream first
+      stopCameraStream();
+      
       setIsLoading(true);
       setIsScanning(true);
       setError('');
       setScanAttempts(0);
       
       readerRef.current = createReader(selectedFormat);
-      
-      if (readerRef.current) {
-        readerRef.current.reset();
-      }
-      
-      if (scanInterval) {
-        clearInterval(scanInterval);
-        setScanInterval(null);
-      }
       
       const constraints: MediaTrackConstraints = {
         deviceId: { exact: selectedCamera },
@@ -183,6 +198,7 @@ const CameraPreview: React.FC<CameraPreviewProps> = ({ onClose, onBarcodeDetecte
   };
 
   const handleCameraChange = (cameraId: string) => {
+    if (cameraId === selectedCamera) return;
     setSelectedCamera(cameraId);
   };
 
@@ -208,6 +224,7 @@ const CameraPreview: React.FC<CameraPreviewProps> = ({ onClose, onBarcodeDetecte
     fetchCameras();
 
     return () => {
+      stopCameraStream();
       if (readerRef.current) {
         try {
           readerRef.current.reset();
@@ -215,20 +232,12 @@ const CameraPreview: React.FC<CameraPreviewProps> = ({ onClose, onBarcodeDetecte
           console.error('Error resetting camera:', e);
         }
       }
-      
-      if (scanInterval) {
-        clearInterval(scanInterval);
-      }
-      
-      if (videoRef.current && videoRef.current.srcObject) {
-        const stream = videoRef.current.srcObject as MediaStream;
-        stream.getTracks().forEach(track => track.stop());
-      }
     };
   }, []);
 
   useEffect(() => {
-    if (selectedCamera && readerRef.current) {
+    if (selectedCamera) {
+      console.log("Starting scanner with camera ID:", selectedCamera);
       startScanner();
     }
   }, [selectedCamera]);

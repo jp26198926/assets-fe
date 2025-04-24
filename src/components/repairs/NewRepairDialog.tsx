@@ -1,6 +1,6 @@
 
-import React, { useEffect } from 'react';
-import { useForm, Controller } from 'react-hook-form';
+import React, { useEffect, useState } from 'react';
+import { useForm } from 'react-hook-form';
 import {
   Dialog,
   DialogContent,
@@ -12,9 +12,11 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, Plus, Barcode } from "lucide-react";
+import { Loader2, Plus, Barcode, Camera } from "lucide-react";
 import { useAuth } from '@/hooks/useAuth';
 import BarcodeSearch from '@/components/items/BarcodeSearch';
+import CameraPreview from '@/components/items/CameraPreview';
+import { toast } from '@/hooks/use-toast';
 
 type RepairFormValues = {
   date: string;
@@ -39,6 +41,7 @@ const NewRepairDialog: React.FC<NewRepairDialogProps> = ({
 }) => {
   const { register, handleSubmit, setValue, reset, formState: { errors } } = useForm<RepairFormValues>();
   const { user } = useAuth();
+  const [showScanner, setShowScanner] = useState(false);
 
   const handleCreate = (data: RepairFormValues) => {
     const completeData = {
@@ -60,9 +63,30 @@ const NewRepairDialog: React.FC<NewRepairDialogProps> = ({
     onOpenChange(false);
   };
 
+  const handleBarcodeDetected = (barcode: string) => {
+    // Find item with this barcode (serial number)
+    const foundItem = items.find(item => item.serialNo === barcode);
+    
+    if (foundItem) {
+      setValue('itemId', foundItem._id);
+      toast({
+        title: 'Item Found',
+        description: `Found item: ${foundItem.itemName}`,
+      });
+      setShowScanner(false);
+    } else {
+      toast({
+        title: 'Item Not Found',
+        description: `No item found with serial number: ${barcode}`,
+        variant: 'destructive'
+      });
+    }
+  };
+
   useEffect(() => {
     if (!open) {
       reset();
+      setShowScanner(false);
     }
     
     return () => {
@@ -109,7 +133,37 @@ const NewRepairDialog: React.FC<NewRepairDialogProps> = ({
               type="hidden"
               {...register("itemId", { required: "Item is required" })}
             />
-            <BarcodeSearch onItemFound={handleItemFound} />
+            
+            {showScanner ? (
+              <div className="space-y-2">
+                <CameraPreview 
+                  onClose={() => setShowScanner(false)} 
+                  onBarcodeDetected={handleBarcodeDetected} 
+                />
+                <Button 
+                  type="button" 
+                  variant="secondary" 
+                  className="w-full"
+                  onClick={() => setShowScanner(false)}
+                >
+                  Cancel Scanner
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <BarcodeSearch onItemFound={handleItemFound} />
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => setShowScanner(true)}
+                >
+                  <Camera className="mr-2 h-4 w-4" />
+                  Scan Barcode with Camera
+                </Button>
+              </div>
+            )}
+            
             {errors.itemId && (
               <p className="text-red-500 text-sm">{errors.itemId.message}</p>
             )}
