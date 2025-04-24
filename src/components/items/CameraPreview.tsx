@@ -4,6 +4,7 @@ import { Loader2, ScanBarcode, Camera, SwitchCamera } from 'lucide-react';
 import { BrowserMultiFormatReader, DecodeHintType, BarcodeFormat } from '@zxing/library';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import { useIsMobile } from '@/hooks/use-mobile';
 
 interface CameraPreviewProps {
   onClose: () => void;
@@ -18,11 +19,25 @@ const CameraPreview: React.FC<CameraPreviewProps> = ({ onClose, onBarcodeDetecte
   const readerRef = useRef<BrowserMultiFormatReader | null>(null);
   const [cameras, setCameras] = useState<Array<{ deviceId: string, label: string }>>([]);
   const [selectedCamera, setSelectedCamera] = useState<string>('');
+  const isMobile = useIsMobile();
 
   // This function will fetch and set available cameras
   const fetchCameras = async () => {
     try {
       setIsLoading(true);
+      setError('');
+      
+      // Request camera permission first
+      await navigator.mediaDevices.getUserMedia({ video: true })
+        .then(stream => {
+          // Stop the temporary stream
+          stream.getTracks().forEach(track => track.stop());
+        })
+        .catch(err => {
+          console.error('Error obtaining camera permission:', err);
+          throw new Error('Camera permission denied. Please check your browser settings.');
+        });
+      
       const devices = await navigator.mediaDevices.enumerateDevices();
       const videoDevices = devices
         .filter(device => device.kind === 'videoinput')
@@ -48,7 +63,7 @@ const CameraPreview: React.FC<CameraPreviewProps> = ({ onClose, onBarcodeDetecte
       setIsLoading(false);
     } catch (err) {
       console.error('Error fetching cameras:', err);
-      setError('Unable to access camera devices. Please check permissions.');
+      setError(err instanceof Error ? err.message : 'Unable to access camera devices. Please check permissions.');
       setIsLoading(false);
     }
   };
@@ -60,11 +75,24 @@ const CameraPreview: React.FC<CameraPreviewProps> = ({ onClose, onBarcodeDetecte
     try {
       setIsLoading(true);
       setIsScanning(true);
+      setError('');
       
       // Reset previous scanner if active
       readerRef.current.reset();
       
-      // Start decoding from the selected device
+      // Configure constraints specifically for mobile
+      const constraints: MediaTrackConstraints = {
+        deviceId: { exact: selectedCamera }
+      };
+      
+      // For mobile devices, explicitly set width/height and other parameters
+      if (isMobile) {
+        constraints.width = { ideal: 1280 };
+        constraints.height = { ideal: 720 };
+        constraints.facingMode = 'environment'; // Prefer back camera on mobile
+      }
+      
+      // Start decoding from the selected device with custom constraints
       await readerRef.current.decodeFromVideoDevice(
         selectedCamera,
         videoRef.current,
@@ -80,6 +108,14 @@ const CameraPreview: React.FC<CameraPreviewProps> = ({ onClose, onBarcodeDetecte
           }
         }
       );
+      
+      // Ensure video is playing after setting up
+      if (videoRef.current) {
+        videoRef.current.play().catch(err => {
+          console.error('Error playing video:', err);
+          throw new Error('Failed to start video stream');
+        });
+      }
       
       setIsLoading(false);
     } catch (err) {
@@ -161,7 +197,9 @@ const CameraPreview: React.FC<CameraPreviewProps> = ({ onClose, onBarcodeDetecte
           ref={videoRef}
           className="w-full h-[300px] object-cover rounded-md"
           playsInline
+          autoPlay
           muted
+          style={{ transform: 'scaleX(1)' }} /* Fix mirrored video on some phones */
         />
         
         {isScanning && !isLoading && (
