@@ -32,8 +32,7 @@ const RepairsTableHeader: React.FC<RepairsTableHeaderProps> = ({
         {renderSortableHeader('Reported By', 'reportBy.firstname')}
         {renderSortableHeader('Status', 'status')}
         {renderSortableHeader('Diagnosis', 'diagnosis')}
-        {renderSortableHeader('Checked By', 'checkedBy.firstname')}
-        <TableHead className="w-[100px]">Actions</TableHead>
+        <TableHead>Actions</TableHead>
       </TableRow>
     </TableHeader>
   );

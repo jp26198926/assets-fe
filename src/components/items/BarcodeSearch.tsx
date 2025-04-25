@@ -6,7 +6,6 @@ import { Loader2, Search, Camera } from "lucide-react";
 import { useItemsApi } from '@/hooks/useItemsApi';
 import { toast } from '@/hooks/use-toast';
 import CameraPreview from './CameraPreview';
-import ItemDetailsDialog from './ItemDetailsDialog';
 
 interface BarcodeSearchProps {
   onItemFound: (item: any) => void;
@@ -16,7 +15,6 @@ const BarcodeSearch: React.FC<BarcodeSearchProps> = ({ onItemFound }) => {
   const [barcodeId, setBarcodeId] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
-  const [showDetails, setShowDetails] = useState(false);
   const [foundItem, setFoundItem] = useState<any>(null);
 
   const { getItemByBarcode } = useItemsApi();
@@ -36,11 +34,12 @@ const BarcodeSearch: React.FC<BarcodeSearchProps> = ({ onItemFound }) => {
     setFoundItem(null);
 
     try {
-      const item = await getItemByBarcode(searchId);
+      // Trim and convert to uppercase for case-insensitive search
+      const normalizedBarcode = searchId.trim().toUpperCase();
+      const item = await getItemByBarcode(normalizedBarcode);
 
       if (item) {
         setFoundItem(item);
-        setShowDetails(true);
         onItemFound(item);
         setShowCamera(false); // Close camera if open
       }
@@ -126,18 +125,6 @@ const BarcodeSearch: React.FC<BarcodeSearchProps> = ({ onItemFound }) => {
           onBarcodeDetected={handleBarcodeDetected}
         />
       )}
-
-      <ItemDetailsDialog
-        item={foundItem}
-        open={showDetails}
-        onOpenChange={(open) => {
-          setShowDetails(open);
-          if (!open) {
-            // Clear the barcode ID when dialog is closed to allow for new scan
-            setBarcodeId('');
-          }
-        }}
-      />
     </div>
   );
 };

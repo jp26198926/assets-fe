@@ -1,4 +1,3 @@
-
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { toast } from '@/hooks/use-toast';
@@ -49,7 +48,6 @@ export const useRepairsApi = () => {
     problem: string, 
     reportBy: string 
   }) => {
-    // Add console logging to help debug the request
     console.log('Creating repair with data:', repairData);
     const response = await api.post('/api/repairs', repairData);
     return response.data;
