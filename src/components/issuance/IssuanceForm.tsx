@@ -1,4 +1,3 @@
-
 import React, { useState, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -15,6 +14,7 @@ import { cn } from "@/lib/utils";
 import { CalendarIcon } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import SignaturePad from 'react-signature-canvas';
+import BarcodeSearch from '@/components/items/BarcodeSearch';
 
 const formSchema = z.object({
   date: z.date({
@@ -74,6 +74,10 @@ const IssuanceForm: React.FC<IssuanceFormProps> = ({
       date: format(data.date, 'yyyy-MM-dd'),
       signature
     });
+  };
+
+  const handleItemFound = (item: any) => {
+    form.setValue('itemId', item._id);
   };
 
   const clearSignature = () => {
@@ -139,33 +143,10 @@ const IssuanceForm: React.FC<IssuanceFormProps> = ({
             <FormField
               control={form.control}
               name="itemId"
-              render={({ field }) => (
+              render={() => (
                 <FormItem>
                   <FormLabel>Item</FormLabel>
-                  <Select 
-                    onValueChange={field.onChange} 
-                    defaultValue={field.value}
-                    disabled={isLoadingItems}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select an item" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {isLoadingItems ? (
-                        <SelectItem value="loading" disabled>Loading items...</SelectItem>
-                      ) : availableItems.length > 0 ? (
-                        availableItems.map((item) => (
-                          <SelectItem key={item._id} value={item._id}>
-                            {item.barcodeId} - {item.itemName}
-                          </SelectItem>
-                        ))
-                      ) : (
-                        <SelectItem value="none" disabled>No available items</SelectItem>
-                      )}
-                    </SelectContent>
-                  </Select>
+                  <BarcodeSearch onItemFound={handleItemFound} />
                   <FormMessage />
                 </FormItem>
               )}

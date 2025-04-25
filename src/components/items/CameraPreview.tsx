@@ -1,10 +1,10 @@
-
 import React, { useRef, useEffect, useState } from 'react';
-import { Loader2, ScanBarcode, Camera, SwitchCamera } from 'lucide-react';
+import { Loader2, ScanBarcode, Camera, SwitchCamera, Upload } from 'lucide-react';
 import { BrowserMultiFormatReader, DecodeHintType, BarcodeFormat } from '@zxing/library';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { useIsMobile } from '@/hooks/use-mobile';
+import { toast } from '@/hooks/use-toast';
 
 interface CameraPreviewProps {
   onClose: () => void;
@@ -20,17 +20,15 @@ const CameraPreview: React.FC<CameraPreviewProps> = ({ onClose, onBarcodeDetecte
   const [cameras, setCameras] = useState<Array<{ deviceId: string, label: string }>>([]);
   const [selectedCamera, setSelectedCamera] = useState<string>('');
   const isMobile = useIsMobile();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // This function will fetch and set available cameras
   const fetchCameras = async () => {
     try {
       setIsLoading(true);
       setError('');
       
-      // Request camera permission first
       await navigator.mediaDevices.getUserMedia({ video: true })
         .then(stream => {
-          // Stop the temporary stream
           stream.getTracks().forEach(track => track.stop());
         })
         .catch(err => {
@@ -48,7 +46,6 @@ const CameraPreview: React.FC<CameraPreviewProps> = ({ onClose, onBarcodeDetecte
       
       setCameras(videoDevices);
       
-      // Select the back camera by default if available, otherwise select the first camera
       const backCamera = videoDevices.find(device => 
         device.label.toLowerCase().includes('back') || 
         device.label.toLowerCase().includes('environment')
@@ -68,7 +65,6 @@ const CameraPreview: React.FC<CameraPreviewProps> = ({ onClose, onBarcodeDetecte
     }
   };
 
-  // Start the barcode scanner with the selected camera
   const startScanner = async () => {
     if (!readerRef.current || !videoRef.current || !selectedCamera) return;
     
@@ -77,22 +73,18 @@ const CameraPreview: React.FC<CameraPreviewProps> = ({ onClose, onBarcodeDetecte
       setIsScanning(true);
       setError('');
       
-      // Reset previous scanner if active
       readerRef.current.reset();
       
-      // Configure constraints specifically for mobile
       const constraints: MediaTrackConstraints = {
         deviceId: { exact: selectedCamera }
       };
       
-      // For mobile devices, explicitly set width/height and other parameters
       if (isMobile) {
         constraints.width = { ideal: 1280 };
         constraints.height = { ideal: 720 };
-        constraints.facingMode = 'environment'; // Prefer back camera on mobile
+        constraints.facingMode = 'environment';
       }
       
-      // Start decoding from the selected device with custom constraints
       await readerRef.current.decodeFromVideoDevice(
         selectedCamera,
         videoRef.current,
@@ -103,13 +95,11 @@ const CameraPreview: React.FC<CameraPreviewProps> = ({ onClose, onBarcodeDetecte
             setIsScanning(false);
           }
           if (error && !(error instanceof TypeError)) {
-            // Ignore TypeError as they are often just the absence of a barcode
             console.error('Scanning error:', error);
           }
         }
       );
       
-      // Ensure video is playing after setting up
       if (videoRef.current) {
         videoRef.current.play().catch(err => {
           console.error('Error playing video:', err);
@@ -126,13 +116,66 @@ const CameraPreview: React.FC<CameraPreviewProps> = ({ onClose, onBarcodeDetecte
     }
   };
 
-  // Handle camera selection change
   const handleCameraChange = (cameraId: string) => {
     setSelectedCamera(cameraId);
   };
 
+  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const img = new Image();
+      img.src = URL.createObjectURL(file);
+
+      await new Promise((resolve) => {
+        img.onload = resolve;
+      });
+
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        throw new Error('Could not get canvas context');
+      }
+      
+      ctx.drawImage(img, 0, 0);
+
+      const hints = new Map();
+      const formats = [
+        BarcodeFormat.QR_CODE,
+        BarcodeFormat.EAN_13,
+        BarcodeFormat.CODE_128,
+        BarcodeFormat.CODE_39,
+        BarcodeFormat.UPC_A,
+        BarcodeFormat.UPC_E,
+        BarcodeFormat.EAN_8,
+      ];
+      hints.set(DecodeHintType.POSSIBLE_FORMATS, formats);
+      hints.set(DecodeHintType.TRY_HARDER, true);
+      
+      const reader = new BrowserMultiFormatReader(hints);
+      
+      const result = await reader.decodeFromImageElement(img);
+      
+      if (result) {
+        onBarcodeDetected(result.getText());
+      }
+
+      URL.revokeObjectURL(img.src);
+    } catch (error) {
+      console.error('Error reading barcode from image:', error);
+      toast({
+        title: "Error",
+        description: "Could not detect a barcode in the uploaded image",
+        variant: "destructive",
+      });
+    }
+  };
+
   useEffect(() => {
-    // Configure barcode reader hints for better performance
     const hints = new Map();
     const formats = [
       BarcodeFormat.QR_CODE,
@@ -147,14 +190,11 @@ const CameraPreview: React.FC<CameraPreviewProps> = ({ onClose, onBarcodeDetecte
     hints.set(DecodeHintType.POSSIBLE_FORMATS, formats);
     hints.set(DecodeHintType.TRY_HARDER, true);
     
-    // Create reader instance
     const codeReader = new BrowserMultiFormatReader(hints);
     readerRef.current = codeReader;
 
-    // Fetch available cameras
     fetchCameras();
 
-    // Cleanup function to release camera when component unmounts
     return () => {
       if (readerRef.current) {
         try {
@@ -166,7 +206,6 @@ const CameraPreview: React.FC<CameraPreviewProps> = ({ onClose, onBarcodeDetecte
     };
   }, []);
 
-  // Start scanner whenever selected camera changes
   useEffect(() => {
     if (selectedCamera && readerRef.current) {
       startScanner();
@@ -199,7 +238,7 @@ const CameraPreview: React.FC<CameraPreviewProps> = ({ onClose, onBarcodeDetecte
           playsInline
           autoPlay
           muted
-          style={{ transform: 'scaleX(1)' }} /* Fix mirrored video on some phones */
+          style={{ transform: 'scaleX(1)' }}
         />
         
         {isScanning && !isLoading && (
@@ -214,36 +253,56 @@ const CameraPreview: React.FC<CameraPreviewProps> = ({ onClose, onBarcodeDetecte
         )}
       </div>
 
-      {cameras.length > 0 && (
-        <div className="mt-4 flex items-center gap-2">
-          <Select
-            value={selectedCamera}
-            onValueChange={handleCameraChange}
-            disabled={isLoading}
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Select camera" />
-            </SelectTrigger>
-            <SelectContent>
-              {cameras.map((camera) => (
-                <SelectItem key={camera.deviceId} value={camera.deviceId}>
-                  {camera.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+      <div className="mt-4 flex flex-col gap-4">
+        {cameras.length > 0 && (
+          <div className="flex items-center gap-2">
+            <Select
+              value={selectedCamera}
+              onValueChange={handleCameraChange}
+              disabled={isLoading}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select camera" />
+              </SelectTrigger>
+              <SelectContent>
+                {cameras.map((camera) => (
+                  <SelectItem key={camera.deviceId} value={camera.deviceId}>
+                    {camera.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
 
-          <Button 
-            variant="outline" 
-            size="icon"
-            onClick={fetchCameras}
-            disabled={isLoading}
-            title="Refresh camera list"
+            <Button 
+              variant="outline" 
+              size="icon"
+              onClick={fetchCameras}
+              disabled={isLoading}
+              title="Refresh camera list"
+            >
+              <SwitchCamera className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
+
+        <div className="flex items-center gap-2 justify-center">
+          <Button
+            variant="outline"
+            onClick={() => fileInputRef.current?.click()}
+            className="w-full"
           >
-            <SwitchCamera className="h-4 w-4" />
+            <Upload className="h-4 w-4 mr-2" />
+            Upload Barcode Image
           </Button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handleImageUpload}
+          />
         </div>
-      )}
+      </div>
     </div>
   );
 };
