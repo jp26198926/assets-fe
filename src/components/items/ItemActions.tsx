@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Button } from "@/components/ui/button";
-import { MoreVertical, Eye, Pencil, Trash2, ExternalLink } from "lucide-react";
+import { MoreVertical, Eye, Pencil, Trash2, ExternalLink, Send } from "lucide-react";
 import {
   Popover,
   PopoverContent,
@@ -15,6 +15,7 @@ interface ItemActionsProps {
   onEdit: (item: Item) => void;
   onDelete: (item: Item) => void;
   onNavigate: (id: string) => void;
+  onIssuance?: (item: Item) => void; // This will now open the modal instead of navigating
 }
 
 const ItemActions: React.FC<ItemActionsProps> = ({
@@ -23,6 +24,7 @@ const ItemActions: React.FC<ItemActionsProps> = ({
   onEdit,
   onDelete,
   onNavigate,
+  onIssuance,
 }) => {
   return (
     <Popover>
@@ -52,6 +54,17 @@ const ItemActions: React.FC<ItemActionsProps> = ({
             <ExternalLink className="h-4 w-4" />
             Details
           </Button>
+          {onIssuance && item.status === 'Active' && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => onIssuance(item)}
+              className="flex w-full items-center justify-start gap-2 rounded-none"
+            >
+              <Send className="h-4 w-4" />
+              Issuance
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="sm"

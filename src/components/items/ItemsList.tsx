@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -12,6 +13,7 @@ import { Loader2 } from "lucide-react";
 import { Item } from '@/hooks/useItemsApi';
 import TablePagination from '@/components/TablePagination';
 import ItemDetailsDialog from '@/components/items/ItemDetailsDialog';
+import ItemActions from '@/components/items/ItemActions'; // Add this import
 import {
   AlertDialog,
   AlertDialogAction,
@@ -27,7 +29,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Eye, Pencil, Trash2, ExternalLink, MoreHorizontal, ArrowUpDown } from "lucide-react";
+import { Eye, Pencil, Trash2, ExternalLink, MoreHorizontal, ArrowUpDown, Send } from "lucide-react";
 
 interface ItemsListProps {
   items: Item[];
@@ -35,6 +37,7 @@ interface ItemsListProps {
   searchQuery: string;
   onEdit: (item: Item) => void;
   onDelete: (item: Item) => void;
+  onIssuance?: (item: Item) => void; // New optional prop
 }
 
 type SortConfig = {
@@ -47,7 +50,8 @@ const ItemsList: React.FC<ItemsListProps> = ({
   isLoading,
   searchQuery,
   onEdit,
-  onDelete
+  onDelete,
+  onIssuance
 }) => {
   const navigate = useNavigate();
   const [itemToDelete, setItemToDelete] = useState<Item | null>(null);
@@ -172,6 +176,18 @@ const ItemsList: React.FC<ItemsListProps> = ({
               >
                 <ExternalLink className="h-4 w-4" /> Details
               </button>
+              {onIssuance && item.status === 'Active' && (
+                <button
+                  className="flex w-full items-center gap-2 px-3 py-2 hover:bg-neutral-100 text-sm"
+                  onClick={() => {
+                    onIssuance(item);
+                    setOpenActionId(null);
+                  }}
+                  type="button"
+                >
+                  <Send className="h-4 w-4" /> Issuance
+                </button>
+              )}
               <button
                 className="flex w-full items-center gap-2 px-3 py-2 hover:bg-neutral-100 text-sm"
                 onClick={() => {
@@ -295,60 +311,17 @@ const ItemsList: React.FC<ItemsListProps> = ({
                         </span>
                       </TableCell>
                       <TableCell>
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <button
-                              className="rounded-full p-2 border hover:bg-neutral-100"
-                              aria-label="Actions"
-                              type="button"
-                            >
-                              <MoreHorizontal className="h-4 w-4" />
-                            </button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-40 p-0">
-                            <div className="flex flex-col">
-                              <button
-                                className="flex w-full items-center gap-2 px-3 py-2 hover:bg-neutral-100 text-sm"
-                                onClick={() => {
-                                  setSelectedItem(item);
-                                  setShowDetailsDialog(true);
-                                }}
-                                type="button"
-                              >
-                                <Eye className="h-4 w-4" /> View
-                              </button>
-                              <button
-                                className="flex w-full items-center gap-2 px-3 py-2 hover:bg-neutral-100 text-sm"
-                                onClick={() => {
-                                  viewItem(item._id);
-                                }}
-                                type="button"
-                              >
-                                <ExternalLink className="h-4 w-4" /> Details
-                              </button>
-                              <button
-                                className="flex w-full items-center gap-2 px-3 py-2 hover:bg-neutral-100 text-sm"
-                                onClick={() => {
-                                  onEdit(item);
-                                }}
-                                disabled={item.status !== 'Active'}
-                                type="button"
-                              >
-                                <Pencil className="h-4 w-4" /> Edit
-                              </button>
-                              <button
-                                className="flex w-full items-center gap-2 px-3 py-2 hover:bg-neutral-100 text-sm text-red-600"
-                                onClick={() => {
-                                  setItemToDelete(item);
-                                }}
-                                disabled={item.status !== 'Active'}
-                                type="button"
-                              >
-                                <Trash2 className="h-4 w-4" /> Delete
-                              </button>
-                            </div>
-                          </PopoverContent>
-                        </Popover>
+                        <ItemActions 
+                          item={item}
+                          onView={() => {
+                            setSelectedItem(item);
+                            setShowDetailsDialog(true);
+                          }}
+                          onNavigate={viewItem}
+                          onEdit={onEdit}
+                          onDelete={() => setItemToDelete(item)}
+                          onIssuance={onIssuance}
+                        />
                       </TableCell>
                     </TableRow>
                   ))

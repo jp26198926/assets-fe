@@ -1,4 +1,6 @@
+
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Card,
   CardContent,
@@ -10,14 +12,19 @@ import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
 import { useItemsApi } from '@/hooks/useItemsApi';
 import { useItemTypesApi } from '@/hooks/useItemTypesApi';
+import { useRoomsApi } from '@/hooks/useRoomsApi';
+import { useAreasApi } from '@/hooks/useAreasApi'; // Use areas instead of rooms
+import { useIssuanceApi } from '@/hooks/useIssuanceApi';
 import { toast } from '@/hooks/use-toast';
 import { exportToExcel, exportToPdf } from '@/lib/exportUtils';
+import { useAuth } from '@/hooks/useAuth';
 
-// Import our new components
+// Import our components
 import SearchExportHeader from '@/components/SearchExportHeader';
 import ItemsList from '@/components/items/ItemsList';
 import ItemForm from '@/components/items/ItemForm';
 import ItemsAdvancedSearch from '@/components/items/ItemsAdvancedSearch';
+import ItemIssuanceModal from '@/components/items/ItemIssuanceModal';
 import {
   Tooltip,
   TooltipContent,
@@ -26,23 +33,38 @@ import {
 } from "@/components/ui/tooltip";
 
 const ItemsPage: React.FC = () => {
+  const navigate = useNavigate();
+  const { user } = useAuth();
   const { useItems, useCreateItem, useUpdateItem, useDeleteItem } = useItemsApi();
   const { useItemTypes } = useItemTypesApi();
+  const { useAreas } = useAreasApi(); // Use areas API instead of rooms
+  const { useCreateIssuance } = useIssuanceApi();
   
   // Data fetching
   const { data: items = [], isLoading } = useItems();
   const { data: itemTypes = [], isLoading: isLoadingTypes } = useItemTypes();
+  const { data: areas = [], isLoading: isLoadingAreas } = useAreas(); // Use areas instead of rooms
+  
+  // Debug areas data
+  React.useEffect(() => {
+    console.log('Areas data:', areas);
+  }, [areas]);
   
   // Mutations
   const { mutate: createItem, isPending: isCreating } = useCreateItem();
   const { mutate: updateItem, isPending: isUpdating } = useUpdateItem();
   const { mutate: deleteItem, isPending: isDeleting } = useDeleteItem();
+  const { mutate: createIssuance, isPending: isCreatingIssuance } = useCreateIssuance();
   
   // State for UI
   const [showForm, setShowForm] = useState(false);
   const [editingItem, setEditingItem] = useState<any | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [filters, setFilters] = useState<any>({});
+  
+  // State for issuance modal
+  const [showIssuanceModal, setShowIssuanceModal] = useState(false);
+  const [issuanceItem, setIssuanceItem] = useState<any | null>(null);
   
   // Filter items based on search query and advanced filters
   const filteredItems = items.filter((item: any) => {
@@ -129,6 +151,42 @@ const ItemsPage: React.FC = () => {
         toast({
           title: 'Error',
           description: error.response?.data?.error || 'Failed to delete item',
+          variant: 'destructive'
+        });
+      }
+    });
+  };
+
+  // Handle issuance action
+  const handleIssuance = (item: any) => {
+    // Open the issuance modal with the selected item
+    setIssuanceItem(item);
+    setShowIssuanceModal(true);
+  };
+
+  const handleIssuanceSubmit = (data: any) => {
+    if (!user) return;
+    
+    createIssuance({
+      ...data,
+      date: data.date,
+      itemId: data.itemId,
+      roomId: data.roomId,
+      remarks: data.remarks,
+      signature: data.signature
+    }, {
+      onSuccess: () => {
+        setShowIssuanceModal(false);
+        setIssuanceItem(null);
+        toast({
+          title: 'Success',
+          description: 'Item issued successfully',
+        });
+      },
+      onError: (error: any) => {
+        toast({
+          title: 'Error',
+          description: error.response?.data?.error || 'Failed to issue item',
           variant: 'destructive'
         });
       }
@@ -231,6 +289,7 @@ const ItemsPage: React.FC = () => {
             searchQuery={searchQuery}
             onEdit={handleEdit}
             onDelete={handleDelete}
+            onIssuance={handleIssuance}
           />
         </CardContent>
       </Card>
@@ -243,6 +302,16 @@ const ItemsPage: React.FC = () => {
         isProcessing={isCreating || isUpdating}
         itemTypes={itemTypes}
         isLoadingTypes={isLoadingTypes}
+      />
+
+      <ItemIssuanceModal
+        open={showIssuanceModal}
+        onOpenChange={setShowIssuanceModal}
+        onSubmit={handleIssuanceSubmit}
+        isProcessing={isCreatingIssuance}
+        rooms={areas} // Pass areas data instead of rooms
+        item={issuanceItem}
+        isLoadingRooms={isLoadingAreas} // Use isLoadingAreas instead of isLoadingRooms
       />
     </div>
   );
