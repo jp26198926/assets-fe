@@ -1,3 +1,4 @@
+
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { toast } from '@/hooks/use-toast';
@@ -64,8 +65,17 @@ export const useItemsApi = () => {
   };
 
   const updateItem = async ({ id, data }: { id: string; data: Partial<Item> }) => {
-    const response = await api.put(`/api/items/${id}`, data);
-    return response.data;
+    try {
+      console.log('Sending update request to API:', `/api/items/${id}`, data);
+      const response = await api.put(`/api/items/${id}`, data);
+      return response.data;
+    } catch (error: any) {
+      console.error('API Error in updateItem:', error);
+      if (error.response?.data) {
+        console.error('API Response Error:', error.response.data);
+      }
+      throw error;
+    }
   };
 
   const deleteItem = async ({ id, reason }: { id: string; reason: string }) => {

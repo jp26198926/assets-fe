@@ -97,9 +97,30 @@ const ItemsPage: React.FC = () => {
   // Form submission handlers
   const handleSubmit = (data: any) => {
     if (editingItem) {
+      // When editing, ensure typeId is properly formatted and only send allowed fields
+      const allowedFields = ['typeId', 'itemName', 'brand', 'serialNo', 'otherDetails', 'status'];
+      
+      // Create the update object with only allowed fields
+      const formattedData: any = {};
+      
+      // Process allowed fields from the form data
+      allowedFields.forEach(field => {
+        if (data[field] !== undefined) {
+          // Handle typeId specially
+          if (field === 'typeId') {
+            formattedData.typeId = typeof data.typeId === 'string' ? data.typeId : data.typeId?._id;
+          } else {
+            formattedData[field] = data[field];
+          }
+        }
+      });
+      
+      // Log the update data for debugging
+      console.log('Updating item with data:', formattedData);
+      
       updateItem({
         id: editingItem._id,
-        data
+        data: formattedData
       }, {
         onSuccess: () => {
           resetForm();
@@ -109,6 +130,7 @@ const ItemsPage: React.FC = () => {
           });
         },
         onError: (error: any) => {
+          console.error('Error updating item:', error);
           toast({
             title: 'Error',
             description: error.response?.data?.error || 'Failed to update item',

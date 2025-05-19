@@ -60,6 +60,7 @@ const ItemForm: React.FC<ItemFormProps> = ({
 
   useEffect(() => {
     if (editingItem) {
+      // When editing an item, make sure to handle typeId correctly whether it's an object or string
       setValue('typeId', typeof editingItem.typeId === 'object' ? editingItem.typeId._id : editingItem.typeId);
       setValue('itemName', editingItem.itemName);
       setValue('brand', editingItem.brand);
@@ -226,7 +227,21 @@ const ItemForm: React.FC<ItemFormProps> = ({
   };
 
   const handleFormSubmit = (data: any) => {
-    onSubmit({ ...data, photo: photoPreview });
+    // Only include necessary fields from the form
+    const itemData = {
+      typeId: data.typeId,
+      itemName: data.itemName,
+      brand: data.brand,
+      serialNo: data.serialNo,
+      otherDetails: data.otherDetails,
+    };
+    
+    // Only include photo for new items, not for updates
+    if (!editingItem || photoPreview !== editingItem.photo) {
+      itemData.photo = photoPreview;
+    }
+    
+    onSubmit(itemData);
   };
 
   const checkCameraAvailability = async () => {
